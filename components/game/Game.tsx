@@ -13,6 +13,7 @@ import { Projector } from "./three/anchors";
 import { PLACE_BY_ID } from "@/lib/places";
 import { City, housePosition, type Landmark, type Trip } from "./three/City";
 import { PlaceSheet } from "./ui/PlaceSheet";
+import { RealTxProvider } from "./ui/RealMode";
 import { Room, charMood, moodColor, type Placement } from "./three/Room";
 import { Scene } from "./three/Scene";
 import { Catalogue } from "./ui/Catalogue";
@@ -256,6 +257,7 @@ export default function Game() {
         )}
       </div>
 
+      <RealTxProvider me={me} authHeaders={auth.authHeaders}>
       <div className="pointer-events-none absolute inset-0 z-10">
         {/* Top status strip */}
         {buyMode ? (
@@ -565,6 +567,7 @@ export default function Game() {
           />
         )}
       </div>
+      </RealTxProvider>
     </div>
   );
 }

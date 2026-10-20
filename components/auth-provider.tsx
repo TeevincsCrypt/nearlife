@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
-import { useCreateWallet } from "@privy-io/react-auth/extended-chains";
+import { useCreateWallet, useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { PRIVY_APP_ID, findNearWallet, guestAllowed, privyConfigured, privyDisplayName } from "@/lib/privy";
 
 export interface AuthState {
@@ -19,6 +19,8 @@ export interface AuthState {
   loginAsGuest: (name: string) => void;
   logout: () => Promise<void>;
   authHeaders: () => Promise<Record<string, string>>;
+  /** Signs a 32-byte hash with the Privy NEAR wallet (ed25519). Only set when real mode is possible. */
+  signNearHash: ((hash: `0x${string}`) => Promise<`0x${string}`>) | null;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -73,6 +75,7 @@ function GuestOnlyBridge({ children }: { children: React.ReactNode }) {
       loginAsGuest: g.login,
       logout: async () => g.logout(),
       authHeaders: async (): Promise<Record<string, string>> => (g.guest ? { "x-guest-id": g.guest.id } : {}),
+      signNearHash: null,
     }),
     [g],
   );
@@ -82,6 +85,7 @@ function GuestOnlyBridge({ children }: { children: React.ReactNode }) {
 function PrivyBridge({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
   const { createWallet } = useCreateWallet();
+  const { signRawHash } = useSignRawHash();
   const g = useGuest();
   const [nearAddress, setNearAddress] = useState<string | null>(null);
   const creating = useRef(false);
@@ -126,8 +130,12 @@ function PrivyBridge({ children }: { children: React.ReactNode }) {
         }
         return g.guest ? { "x-guest-id": g.guest.id } : {};
       },
+      signNearHash:
+        privyActive && nearAddress
+          ? async (hash: `0x${string}`) => (await signRawHash({ address: nearAddress, chainType: "near", hash })).signature
+          : null,
     };
-  }, [ready, authenticated, user, login, logout, getAccessToken, g, nearAddress]);
+  }, [ready, authenticated, user, login, logout, getAccessToken, g, nearAddress, signRawHash]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

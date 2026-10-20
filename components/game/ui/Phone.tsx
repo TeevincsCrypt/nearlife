@@ -7,6 +7,8 @@ import { PLACES, PLACE_BY_ID } from "@/lib/places";
 import type { Character, HouseholdView, NeedKey, StateSnapshot } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn, shortAccount, timeAgo } from "@/lib/utils";
+import { txUrl } from "@/lib/near-real";
+import { REAL_IDS, RealPanelFor } from "./RealMode";
 
 export type EcoId =
   | "names"
@@ -343,7 +345,14 @@ function FeedApp({ snapshot, me, now }: Props) {
             <span className="text-xl">{a.emoji}</span>
             <div className="min-w-0 flex-1">
               <div className="leading-snug text-slate-100">{a.text}</div>
-              <div className="mt-0.5 font-mono text-[10px] text-slate-500">{timeAgo(a.ts, now)}</div>
+              <div className="mt-0.5 flex gap-2 font-mono text-[10px] text-slate-500">
+                {timeAgo(a.ts, now)}
+                {a.txHash && (
+                  <a href={txUrl(a.txHash)} target="_blank" rel="noreferrer" className="text-amber-300 underline">
+                    on-chain tx ↗
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -489,6 +498,8 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
           {(me.debt ?? 0) > 0 && <span className="ml-2 text-amber-300">· Burrow loan {me.debt} SB</span>}
         </div>
       </Row>
+      <RealPanelFor id="wallet" />
+      <div className="px-1 pt-1 font-mono text-[10px] font-bold tracking-widest text-slate-500">IN-GAME SIMBUCKS</div>
       <div className="grid grid-cols-3 gap-1.5">
         {(["send", "receive", "history"] as const).map((t) => (
           <button
@@ -715,6 +726,7 @@ function OutLayerApp(props: Props) {
           output). Here, your Sim pays a job fee in SimBucks and earns a payout when the job finishes. The VRF lucky draw stands in for OutLayer&apos;s verifiable randomness.
         </div>
       </Row>
+      <RealPanelFor id="outlayer" characterId={character?.id} />
       <button
         disabled={!character}
         onClick={() => onPlace("outlayer")}
@@ -733,7 +745,7 @@ function OutLayerApp(props: Props) {
 }
 
 function makeEcoApp(id: EcoId) {
-  return function EcoApp({ snapshot, me, now, onPlace }: Props) {
+  return function EcoApp({ snapshot, me, now, onPlace, character }: Props) {
     const e = ECO[id];
     const place = e.place ? PLACE_BY_ID[e.place] : undefined;
     const here = place
@@ -743,6 +755,7 @@ function makeEcoApp(id: EcoId) {
     return (
       <div className="space-y-2">
         <EcoHeader id={id} />
+        {REAL_IDS.has(id) && <RealPanelFor id={id} characterId={character?.id} />}
         {place && (
           <>
             <Row className="flex-col items-start">
@@ -865,7 +878,9 @@ function AppIcon({ emoji, label, color, onClick, featured }: { emoji: string; la
         style={{ borderColor: `${color}66`, boxShadow: `0 0 14px ${color}33, inset 0 0 10px ${color}1a`, color }}
       >
         {emoji}
-        {featured && <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-[#00ec97] shadow-[0_0_6px_#00ec97]" />}
+        {featured && (
+          <span className="absolute -top-1.5 -right-1.5 rounded bg-amber-300 px-1 font-mono text-[8px] leading-tight font-black text-slate-900">REAL</span>
+        )}
       </span>
       <span className="w-full truncate text-center text-[10px] font-medium text-slate-300">{label}</span>
     </button>
@@ -929,10 +944,13 @@ export function Phone(props: Props) {
                   <AppIcon key={a.id} emoji={a.emoji} label={a.label} color={a.color} onClick={() => setApp(a.id)} />
                 ))}
               </div>
-              <div className="mt-5 mb-2 font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">NEAR ECOSYSTEM</div>
+              <div className="mt-5 mb-2 flex items-center justify-between font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">
+                <span>NEAR ECOSYSTEM</span>
+                <span className="tracking-normal text-amber-300/80">REAL = signs real NEAR txs</span>
+              </div>
               <div className="grid grid-cols-5 gap-x-1.5 gap-y-3">
                 {ECO_ORDER.map((id) => (
-                  <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={id === "wallet" || id === "outlayer"} />
+                  <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={REAL_IDS.has(id)} />
                 ))}
               </div>
               <button

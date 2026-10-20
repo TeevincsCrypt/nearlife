@@ -64,6 +64,8 @@ export interface Household {
   lastTopup?: number;
   /** Outstanding Burrow loan (SimBucks owed). */
   debt?: number;
+  /** Last time each kind of real on-chain action earned an in-game reward. */
+  realRewards?: Record<string, number>;
 }
 
 export interface Listing {
@@ -100,6 +102,8 @@ export interface ActivityEvent {
   amount?: number;
   counterpartyHouseholdId?: string;
   txHash?: string;
+  /** Network of txHash, for explorer links. */
+  txNetwork?: "mainnet" | "testnet";
 }
 
 /** NEP-245 event (NEP-297 envelope) as it would appear in an on-chain log. */
@@ -140,6 +144,8 @@ export interface GameState {
   /** userId -> householdId */
   players: Record<string, string>;
   worldEvent?: { id: string; startedAt: number; endsAt: number };
+  /** Real NEAR transaction hashes already credited (prevents double-claiming). */
+  realTxs?: string[];
   stats: {
     trades: number;
     volume: number;

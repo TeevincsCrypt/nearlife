@@ -5,6 +5,7 @@ import { PLACES, PLACE_BY_ID, TRAVEL } from "@/lib/places";
 import type { HouseholdView } from "@/lib/types";
 import { AnchoredLabel } from "../three/anchors";
 import { cityPlacement, type Landmark, type Trip } from "../three/City";
+import { REAL_IDS } from "./RealMode";
 
 function Pin({
   emoji,
@@ -38,7 +39,7 @@ function Pin({
   );
 }
 
-function PlacePin({ emoji, label, color, onClick }: { emoji: string; label: string; color: string; onClick: () => void }) {
+function PlacePin({ emoji, label, color, real, onClick }: { emoji: string; label: string; color: string; real?: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} className="pointer-events-auto flex cursor-pointer flex-col items-center" style={{ WebkitTapHighlightColor: "transparent" }}>
       <span
@@ -49,6 +50,7 @@ function PlacePin({ emoji, label, color, onClick }: { emoji: string; label: stri
           {emoji}
         </span>
         {label}
+        {real && <span className="rounded bg-amber-300 px-1 font-mono text-[8px] font-black text-slate-900">REAL</span>}
       </span>
       <span className="h-2.5 w-px" style={{ background: color }} />
     </button>
@@ -86,7 +88,7 @@ export function CityMarkers({
       </AnchoredLabel>
       {PLACES.map((p) => (
         <AnchoredLabel key={p.id} id={`pl:${p.id}`}>
-          <PlacePin emoji={p.emoji} label={p.short} color={p.color} onClick={() => onPlace(p.id)} />
+          <PlacePin emoji={p.emoji} label={p.short} color={p.color} real={REAL_IDS.has(p.id)} onClick={() => onPlace(p.id)} />
         </AnchoredLabel>
       ))}
       {trips.map((t) => (

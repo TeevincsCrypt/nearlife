@@ -103,6 +103,36 @@ The Pad has two sections.
 | **Explorer** | Live block height, block time and gas price for mainnet and testnet from NEAR RPC, refreshed every 5 s, plus your account on NearBlocks. |
 | **Ref, Burrow, Rhea, Jumbo, Social, Sputnik, Meteor, HERE, Intents, Aurora, meme.cooking** | Status card: what the project is, what you can do at its building in town, who is there now, your past visits, a "Go to …" button (car / train / plane), and a link to the real app. |
 
+## Real mode (hybrid)
+
+Every place and app works in-game with SimBucks. A few actions can also be done **for real**: a player signed in with Privy signs an actual NEAR transaction from their own embedded NEAR wallet. Those apps and buildings carry an amber **REAL** tag.
+
+| Where | Real action | On-chain |
+|---|---|---|
+| Pad → NEAR Wallet | Send real NEAR to any account | `Transfer` |
+| NEAR Social plaza / Pad → Social | Post to your NEAR Social profile | `social.near` → `set` (0.01 NEAR storage deposit) |
+| Sputnik DAO hall / Pad → Sputnik | Approve or reject proposals of the NEARLIFE DAO | `<dao>.sputnik-dao.near` → `act_proposal` |
+| Ref Finance, Rhea Finance, NEAR Intents / Pad → Ref, Rhea, Intents | Live quote, then swap NEAR → USDC/USDT/… on NEAR | NEAR Intents 1Click API quote, then one tx to `wrap.near`: `near_deposit` + `storage_deposit` + `ft_transfer` to the quote's deposit address |
+| OutLayer lab / Pad → OutLayer | Run a configured OutLayer job | `outlayer.near` → `request_execution` |
+
+How it works:
+
+1. **Signing stays in the browser.** The browser builds the transaction (`lib/near-real.ts`), and Privy's `useSignRawHash` signs its SHA-256 hash with the player's key. It is then broadcast to NEAR RPC. The server never holds player keys and never sends real transactions.
+2. **Confirmation first.** Before anything is signed, a sheet shows the network, the receiver contract, each method, and the total NEAR attached.
+3. **Spending is capped.** Each transaction is limited to `NEXT_PUBLIC_REAL_MAX_NEAR` (default 1 NEAR).
+4. **The server verifies before rewarding.** `/api/real` only reads the chain: it checks that the signer is the household's own wallet, the receiver contract matches, and the transaction succeeded. Only then does it post to the feed with an explorer link and grant a small, rate-limited SimBucks bonus. Each transaction hash is credited once.
+
+Requirements and limits:
+
+- **Privy sign-in only.** Guest accounts are server-derived, so they can't use real mode.
+- **Account must exist on-chain.** The player's implicit account needs some real NEAR before it can sign (Pad → NEAR Wallet shows the address to fund).
+- **Mainnet by default** (`NEXT_PUBLIC_REAL_NETWORK`), because that's where NEAR Social, NEAR Intents, OutLayer and most DAOs live.
+- **Set-up needed for two actions.** DAO voting needs `NEXT_PUBLIC_NEARLIFE_DAO` (a Sputnik DAO you create, with players added as members). OutLayer needs `NEXT_PUBLIC_OUTLAYER_ARGS` (the JSON for your `request_execution` job), because the job's code must come from a repo you choose.
+- **Kept simulated on purpose:**
+  - Borrowing, leveraged trading and memecoin launches, because of real-money risk.
+  - Electric Capital, a16z crypto, Dragonfly, the pool and the wallet stores, because they're not on-chain services.
+  - Aurora, Jumbo and HERE staking.
+
 ## NEAR features used
 
 | Feature | Where | How |
@@ -116,8 +146,8 @@ The Pad has two sections.
 - **Off-chain by default.** Without the settlement variables, the NEP-245 ledger runs on the game server (Redis or memory) with NEP-245 semantics and event format.
 - **Settlement not tested on a live contract.** On-chain settlement needs a deployed NEP-245 contract that supports operator approvals and owner mint/burn. This repository does not deploy one, and that path has not been run against a live contract.
 - **Implicit accounts are unfunded.** They show "not funded" in the explorer until someone sends them NEAR.
-- **Ecosystem places and apps are simulated.** Swaps, loans, memecoins and agent jobs at the in-game buildings move SimBucks inside the game. They don't call Ref, Burrow, Rhea, OutLayer, NEAR Intents or any other real protocol. Real data comes only from NEAR RPC (balances, names, blocks, gas). Names and links are fan tributes, not endorsements.
-- **Not included:** real cross-chain payments via NEAR Intents.
+- **In-game place activities are simulated; real mode is opt-in.** The SimBucks activities at each building stay inside the game. The REAL panels are separate, player-signed NEAR transactions (see Real mode). Names and links are fan tributes, not endorsements.
+- **Real mode is untested against live contracts.** It was built from the contracts' public interfaces but couldn't be run against mainnet from the build environment. Try each real action with a small amount first, and check the NEAR Intents (1Click) request fields and OutLayer `request_execution` arguments against their current docs.
 - **Trading needs other players.** Every trade is between real players, so a solo player can earn (shifts, faucet) and build, but needs neighbors to buy what they make.
 
 ## Tech stack
@@ -149,6 +179,7 @@ app/
   api/place                 POST send a Sim to a city place (car / train / plane) to do an activity
   api/send                  POST NEAR Wallet send: SimBucks to another household (mt_transfer)
   api/near/network          GET  live block height / gas price (mainnet or testnet)
+  api/real                  POST record a player-signed real NEAR tx (verified on-chain first)
   api/activity              GET  public activity feed
   api/nep245                GET  NEP-245 views + event log
   api/near/balance          GET  native NEAR balance via RPC (?network=mainnet for .near names)
@@ -169,6 +200,7 @@ lib/
   engine.ts                 Needs, actions, furniture, market, events, world advance, snapshots
   nep245.ts                 NEP-245 multi-token ledger + events
   near.ts                   NEAR RPC + optional on-chain settlement
+  near-real.ts              Real mode: build / sign (Privy) / send NEAR txs for Social, DAO, Intents, OutLayer
   accounts.ts               Implicit NEAR account derivation
   auth.ts / privy.ts        Server token verification / client Privy helpers
   store.ts                  Upstash Redis or memory store with a lock
@@ -210,6 +242,11 @@ All variables are documented in [`.env.example`](./.env.example).
 | `NEARLIFE_ESCROW_ACCOUNT` | no | Market escrow account id used in NEP-245 events. |
 | `NEP245_CONTRACT_ID`, `NEAR_OPERATOR_ACCOUNT_ID`, `NEAR_OPERATOR_PRIVATE_KEY` | no | Enable on-chain settlement. |
 | `NEARLIFE_ADMIN_TOKEN` | no | Enables `POST /api/reset`. |
+| `NEXT_PUBLIC_REAL_MODE` | no | `false` hides all real-transaction panels (default on). |
+| `NEXT_PUBLIC_REAL_NETWORK`, `NEXT_PUBLIC_REAL_RPC_URL` | no | Network for real mode (default `mainnet`, FastNEAR RPC). |
+| `NEXT_PUBLIC_REAL_MAX_NEAR` | no | Max NEAR attached per real transaction (default 1). |
+| `NEXT_PUBLIC_NEARLIFE_DAO` | for DAO voting | Sputnik DAO account players vote in. |
+| `NEXT_PUBLIC_OUTLAYER_CONTRACT`, `NEXT_PUBLIC_OUTLAYER_ARGS`, `NEXT_PUBLIC_OUTLAYER_DEPOSIT_NEAR` | for real OutLayer jobs | OutLayer contract, `request_execution` JSON args, deposit. |
 
 ## API quick reference
 

@@ -6,6 +6,7 @@ import { PLACE_BY_ID, TRAVEL, type TravelMode } from "@/lib/places";
 import type { Character, HouseholdView } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Portrait } from "./Portrait";
+import { RealPanelFor } from "./RealMode";
 import { Sheet } from "./Sheet";
 
 type Act = <T = unknown>(path: string, body?: unknown, method?: "POST" | "DELETE") => Promise<T | null>;
@@ -142,6 +143,7 @@ export function PlaceSheet({
             <p className="text-[11px] text-slate-500">
               Price includes the {TRAVEL[mode].label.toLowerCase()} fare. Payouts are random within the shown range.
             </p>
+            <RealPanelFor id={place.id} characterId={character?.id} />
           </>
         )}
       </div>
