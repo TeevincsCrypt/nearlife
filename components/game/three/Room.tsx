@@ -124,11 +124,11 @@ function RoomCharacter({
   const busy = c.busy && c.busy.until > now ? c.busy : null;
 
   const spot: Spot | null = useMemo(() => {
-    if (!busy) return null;
+    if (!busy) return c.location ? { pos: [DOOR[0], 0, DOOR[1]], rotY: -Math.PI / 2, pose: "stand", hidden: true } : null;
     if (busy.action === "work" || busy.place) return { pos: [DOOR[0], 0, DOOR[1]], rotY: -Math.PI / 2, pose: "stand", hidden: true };
     const f = busy.at ? layout.find((p) => p.uid === busy.at) : undefined;
     return f ? spotFor(f, slot) : null;
-  }, [busy, layout, slot]);
+  }, [busy, layout, slot, c.location]);
 
   useFrame((_, dt) => {
     const g = group.current;

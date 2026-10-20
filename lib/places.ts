@@ -302,6 +302,19 @@ export const PLACES: PlaceDef[] = [
   },
 ];
 
+// Every place has somewhere to just hang out with whoever else is there.
+for (const p of PLACES) {
+  p.actions.push({
+    id: "hang",
+    label: "Hang out",
+    emoji: "🥤",
+    cost: 0,
+    durationSec: 8,
+    effects: { social: 15, fun: 8 },
+    help: "+15 social, +8 fun with whoever is here",
+  });
+}
+
 export const PLACE_BY_ID: Record<string, PlaceDef> = Object.fromEntries(PLACES.map((p) => [p.id, p]));
 
 export function placeActionId(placeId: string, actionId: string) {

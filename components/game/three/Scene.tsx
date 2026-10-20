@@ -51,17 +51,21 @@ function usePortrait() {
 }
 
 /** Where the camera looks. On tall screens we aim in front of the room so it sits higher, above the HUD. */
-function targetFor(kind: "room" | "city", portrait: boolean): [number, number, number] {
+type Kind = "room" | "city" | "interior";
+
+function targetFor(kind: Kind, portrait: boolean): [number, number, number] {
   if (kind === "room") return portrait ? [0.9, 0, 0.9] : [0, 0.6, 0];
+  // Interiors sit lower on screen, leaving room for the "inside" panel at the top.
+  if (kind === "interior") return portrait ? [-0.2, 0, -0.2] : [0, 1.2, 0];
   return [0, 0, 2];
 }
 
-function CameraRig({ kind, portrait }: { kind: "room" | "city"; portrait: boolean }) {
+function CameraRig({ kind, portrait }: { kind: Kind; portrait: boolean }) {
   const { camera } = useThree();
   useEffect(() => {
     // Pull back further on tall phone screens so the whole room / more of the map fits.
-    const dist = kind === "room" ? (portrait ? 24 : 17) : portrait ? 80 : 60;
-    const dir = kind === "room" ? [1, 1.05, 1] : [0.55, 1, 0.75];
+    const dist = kind === "room" ? (portrait ? 24 : 17) : kind === "interior" ? (portrait ? 25 : 18) : portrait ? 80 : 60;
+    const dir = kind === "city" ? [0.55, 1, 0.75] : [1, 1.05, 1];
     const len = Math.hypot(dir[0], dir[1], dir[2]);
     const t = targetFor(kind, portrait);
     camera.position.set(t[0] + (dir[0] / len) * dist, t[1] + (dir[1] / len) * dist, t[2] + (dir[2] / len) * dist);
@@ -77,7 +81,7 @@ export function Scene({
   powerCut,
   children,
 }: {
-  kind: "room" | "city";
+  kind: Kind;
   hour: number;
   minute: number;
   powerCut: boolean;
@@ -96,9 +100,9 @@ export function Scene({
     >
       <Lights day={day} powerCut={powerCut} />
       <CameraRig kind={kind} portrait={portrait} />
-      {kind === "room" ? (
+      {kind !== "city" ? (
         <OrbitControls
-          key={`room${portrait}`}
+          key={`${kind}${portrait}`}
           makeDefault
           target={target}
           enablePan={false}

@@ -81,6 +81,12 @@ Open the deployed URL, or run locally with `npm install && npm run dev` and open
   | Dragonfly Research Lab | Research a thesis (earn 12–22) |
 
   The map also has a railway loop with stations and a running train, and an airfield.
+
+- **Inside places.** Tap a place, then **🚪 Go inside**.
+  - **Interiors:** every building has a 3D interior themed to what it is: trading desks and a live chart wall at the exchanges, rows of benches and a ballot box at the DAO hall, server racks at OutLayer and the Explorer, a pool with loungers, a launch stage at meme.cooking, a hackathon table at NEAR HQ, and so on.
+  - **Stations:** each activity is a glowing station. Every place also has a bar where you can **Hang out** with whoever is there.
+  - **Getting there:** tapping a station when your Sim is elsewhere asks how to get there (car, train or plane). Once the Sim arrives it **stays at that place**, so further activities there cost no fare. **🏠 Go home** (or doing anything at home) brings it back.
+  - **Shared:** other players' Sims inside the same building show up with name tags and what they're doing.
 - **Social.** "Call a neighbor" picks a Sim from another player's household (preferring people who are online). It boosts both Sims' Social, and the call shows in the feed.
 - **Leaders.** Households ranked by net worth (SimBucks + furniture).
 - **Top up (+).** Testnet faucet (+100 SB every 5 minutes) plus shortcuts to the ways of earning.

@@ -13,6 +13,8 @@ import { Projector } from "./three/anchors";
 import { PLACE_BY_ID } from "@/lib/places";
 import { City, housePosition, type Landmark, type Trip } from "./three/City";
 import { PlaceSheet } from "./ui/PlaceSheet";
+import { PlaceInterior } from "./three/PlaceInterior";
+import { InsideLabels, InsidePanel } from "./ui/InsideOverlay";
 import { RealTxProvider } from "./ui/RealMode";
 import { Room, charMood, moodColor, type Placement } from "./three/Room";
 import { Scene } from "./three/Scene";
@@ -28,7 +30,7 @@ import { GlassButton } from "./ui/Sheet";
 import { TopUpSheet } from "./ui/TopUpSheet";
 import { Welcome } from "./ui/Welcome";
 
-type View = "home" | "map" | "visit";
+type View = "home" | "map" | "visit" | "place";
 
 /** Local clock that stays in sync with the server between polls. */
 function useNow(serverNow?: number) {
@@ -77,6 +79,8 @@ export default function Game() {
   const [sheet, setSheet] = useState<"needs" | "topup" | null>(null);
   const [walkTo, setWalkTo] = useState<[number, number] | null>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
+  const [insideId, setInsideId] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | undefined>(undefined);
 
   const me = myHousehold;
   const effectiveView: View = !me && view === "home" ? "map" : view;
@@ -178,7 +182,27 @@ export default function Game() {
     );
   }
 
-  const sceneKind = roomHousehold ? "room" : "city";
+  const insidePlace = effectiveView === "place" && insideId ? PLACE_BY_ID[insideId] : undefined;
+  const sceneKind = roomHousehold ? "room" : insidePlace ? "interior" : "city";
+
+  function enterPlace(id: string) {
+    goto("place");
+    setInsideId(id);
+  }
+
+  /** Tap on a station inside a building: act right away if the Sim is already here, else pick travel. */
+  async function onStation(actionId: string) {
+    if (!insidePlace) return;
+    const busyNow = character?.busy && character.busy.until > now;
+    if (character && !busyNow && character.location === insidePlace.id) {
+      const a = insidePlace.actions.find((x) => x.id === actionId);
+      const ok = await act("/api/place", { characterId: character.id, placeId: insidePlace.id, actionId, travel: "car" });
+      if (ok && a) toast(`${a.emoji} ${character.name}: ${a.label}`, "success");
+      return;
+    }
+    setHighlight(actionId);
+    setPlaceId(insidePlace.id);
+  }
   const selectedPlaced = selFurn && me ? me.layout.find((f) => f.uid === selFurn) : null;
   const placementValid = placement && me ? canPlace(me.layout, placement.itemId, placement.x, placement.z, placement.rot, placement.uid) : false;
 
@@ -230,6 +254,15 @@ export default function Game() {
                 setSheet("needs");
               }}
             />
+          ) : insidePlace ? (
+            <PlaceInterior
+              place={insidePlace}
+              households={snapshot.households}
+              now={now}
+              selectedCharId={character?.id}
+              onStation={onStation}
+              onSimTap={(c, h) => toast(`${c.name} (${h.name})`)}
+            />
           ) : (
             <City households={snapshot.households} myHouseholdId={me?.id} latestTrade={latestTrade} trips={trips} clockOffset={clockOffset} />
           )}
@@ -240,6 +273,8 @@ export default function Game() {
       <div className="pointer-events-none absolute inset-0 z-[5]">
         {roomHousehold ? (
           !buyMode && <CharacterBubbles household={roomHousehold} now={now} />
+        ) : insidePlace ? (
+          <InsideLabels place={insidePlace} households={snapshot.households} now={now} onStation={onStation} />
         ) : (
           <CityMarkers
             households={snapshot.households}
@@ -279,7 +314,7 @@ export default function Game() {
             balance={me ? me.balance : null}
             onTopUp={() => setSheet("topup")}
             onTicker={() => setPhone("feed")}
-            showTicker={effectiveView !== "visit"}
+            showTicker={effectiveView === "home" || effectiveView === "map"}
           />
         )}
 
@@ -531,7 +566,31 @@ export default function Game() {
             now={now}
             act={act}
             toast={toast}
-            onClose={() => setPlaceId(null)}
+            onClose={() => {
+              setPlaceId(null);
+              setHighlight(undefined);
+            }}
+            onEnter={insidePlace?.id === placeId ? undefined : () => enterPlace(placeId)}
+            highlight={highlight}
+          />
+        )}
+
+        {insidePlace && !placeId && !phone && (
+          <InsidePanel
+            place={insidePlace}
+            households={snapshot.households}
+            now={now}
+            character={character}
+            onCity={() => goto("map")}
+            onAll={() => setPlaceId(insidePlace.id)}
+            onHome={async () => {
+              if (!character) return;
+              const ok = await act("/api/place", { characterId: character.id, placeId: insidePlace.id, actionId: "__home" });
+              if (ok) {
+                toast(`🏠 ${character.name} headed home`, "success");
+                goto("home");
+              }
+            }}
           />
         )}
 

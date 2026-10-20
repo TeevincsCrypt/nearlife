@@ -20,6 +20,8 @@ export function PlaceSheet({
   act,
   toast,
   onClose,
+  onEnter,
+  highlight,
 }: {
   placeId: string;
   me: HouseholdView | null;
@@ -29,14 +31,22 @@ export function PlaceSheet({
   act: Act;
   toast: (t: string, k?: "info" | "error" | "success") => void;
   onClose: () => void;
+  /** Walk into the building's interior (shown when not already inside). */
+  onEnter?: () => void;
+  /** Activity tapped inside the building, listed first. */
+  highlight?: string;
 }) {
   const place = PLACE_BY_ID[placeId];
   const [mode, setMode] = useState<TravelMode>("car");
   if (!place) return null;
   const busy = character?.busy && character.busy.until > now ? character.busy : null;
   const here = households.flatMap((h) =>
-    h.characters.filter((c) => c.busy && c.busy.place === place.id && c.busy.until > now && (c.busy.arriveAt ?? 0) <= now).map((c) => ({ c, h })),
+    h.characters
+      .filter((c) => (c.busy && c.busy.place === place.id && c.busy.until > now && (c.busy.arriveAt ?? 0) <= now) || (!(c.busy && c.busy.until > now) && c.location === place.id))
+      .map((c) => ({ c, h })),
   );
+  const atPlace = character?.location === place.id;
+  const actionsOrdered = highlight ? [...place.actions].sort((a, b) => (a.id === highlight ? -1 : b.id === highlight ? 1 : 0)) : place.actions;
   const host = place.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
   return (
@@ -51,6 +61,11 @@ export function PlaceSheet({
       onClose={onClose}
     >
       <div className="space-y-3 pb-2">
+        {onEnter && (
+          <button onClick={onEnter} className="btn-neon w-full cursor-pointer rounded-2xl py-3 font-bold">
+            🚪 Go inside
+          </button>
+        )}
         <a href={place.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold" style={{ color: place.color }}>
           {host} ↗ <span className="font-normal text-slate-500">(real project · NEARLIFE isn&apos;t affiliated)</span>
         </a>
@@ -78,6 +93,11 @@ export function PlaceSheet({
           <div className="rounded-2xl bg-white/[0.04] p-3 text-sm text-slate-300">Move in to visit places.</div>
         ) : (
           <>
+            {atPlace && character ? (
+              <div className="rounded-2xl border border-[#00ec97]/30 bg-[#00ec97]/10 px-3 py-2 text-sm text-[#b7ffe1]">
+                {character.name} is already here, so there's no fare.
+              </div>
+            ) : (
             <div>
               <div className="mb-1.5 font-mono text-[11px] font-bold tracking-widest text-slate-500">GET THERE BY</div>
               <div className="grid grid-cols-3 gap-2">
@@ -99,6 +119,7 @@ export function PlaceSheet({
                 ))}
               </div>
             </div>
+            )}
 
             {busy && character && (
               <div className="rounded-2xl bg-white/[0.04] px-3 py-2 text-sm text-slate-300">
@@ -107,8 +128,8 @@ export function PlaceSheet({
             )}
 
             <div className="space-y-2">
-              {place.actions.map((a) => {
-                const fare = TRAVEL[mode].cost;
+              {actionsOrdered.map((a) => {
+                const fare = atPlace ? 0 : TRAVEL[mode].cost;
                 const extra = a.special === "repay" ? (me.debt ?? 0) : 0;
                 const total = fare + a.cost + extra;
                 const blocked =
@@ -120,11 +141,14 @@ export function PlaceSheet({
                     onClick={async () => {
                       const ok = await act("/api/place", { characterId: character!.id, placeId: place.id, actionId: a.id, travel: mode });
                       if (ok) {
-                        toast(`${TRAVEL[mode].emoji} ${character!.name} is heading to ${place.short}`, "success");
+                        toast(atPlace ? `${a.emoji} ${character!.name}: ${a.label}` : `${TRAVEL[mode].emoji} ${character!.name} is heading to ${place.short}`, "success");
                         onClose();
                       }
                     }}
-                    className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40"
+                    className={cn(
+                      "flex w-full cursor-pointer items-center gap-3 rounded-2xl border bg-white/[0.04] p-3 text-left active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40",
+                      a.id === highlight ? "neon-ring border-transparent" : "border-white/10",
+                    )}
                   >
                     <span className="text-2xl">{a.emoji}</span>
                     <span className="min-w-0 flex-1">
@@ -141,7 +165,7 @@ export function PlaceSheet({
               })}
             </div>
             <p className="text-[11px] text-slate-500">
-              Price includes the {TRAVEL[mode].label.toLowerCase()} fare. Payouts are random within the shown range.
+              {atPlace ? "No travel needed." : `Price includes the ${TRAVEL[mode].label.toLowerCase()} fare.`} Payouts are random within the shown range.
             </p>
             <RealPanelFor id={place.id} characterId={character?.id} />
           </>

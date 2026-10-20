@@ -40,6 +40,8 @@ export interface Character {
   name: string;
   avatar: string;
   look?: CharacterLook;
+  /** City place the Sim is currently hanging around at (null = at home). */
+  location?: string | null;
   needs: Needs;
   busy?: BusyState | null;
 }

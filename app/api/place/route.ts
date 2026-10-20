@@ -1,5 +1,5 @@
 import { readBody, runGame } from "@/lib/api";
-import { getCharacter, startPlaceAction } from "@/lib/engine";
+import { getCharacter, goHome, startPlaceAction } from "@/lib/engine";
 import type { TravelMode } from "@/lib/places";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,10 @@ export async function POST(req: Request) {
     req,
     ({ state, now, household }) => {
       const c = getCharacter(household!, body.characterId ?? "");
+      if (body.actionId === "__home") {
+        goHome(household!, c, now);
+        return null;
+      }
       startPlaceAction(state, household!, c, body.placeId ?? "", body.actionId ?? "", body.travel ?? "car", now);
       return null;
     },

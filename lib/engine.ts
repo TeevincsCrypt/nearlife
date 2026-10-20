@@ -80,6 +80,8 @@ export function startAction(state: GameState, hh: Household, c: Character, actio
   const action = ACTIONS[actionId];
   if (!action) throw new GameError("Unknown action");
   if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  // Doing anything at home (or going to work) brings the Sim back from wherever they were.
+  c.location = null;
   let at: string | undefined;
   if (action.requires) {
     const ev = currentEvent(state);
@@ -184,7 +186,9 @@ const lcFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 export function startPlaceAction(state: GameState, hh: Household, c: Character, placeId: string, actionId: string, mode: TravelMode, now: number) {
   const place = PLACE_BY_ID[placeId];
   const action = place?.actions.find((a) => a.id === actionId);
-  const travel = TRAVEL[mode];
+  // Already at this place: no trip needed.
+  const here = c.location === placeId;
+  const travel = here ? { ...TRAVEL.car, cost: 0, seconds: 0, effects: {} } : TRAVEL[mode];
   if (!place || !action) throw new GameError("Unknown place");
   if (!travel) throw new GameError("Pick car, train or plane");
   if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
@@ -192,7 +196,7 @@ export function startPlaceAction(state: GameState, hh: Household, c: Character, 
   if (action.special === "repay" && !(hh.debt ?? 0)) throw new GameError("You don't owe Burrow anything");
   const upfront = travel.cost + action.cost + (action.special === "repay" ? (hh.debt ?? 0) : 0);
   if (balanceOf(state, hh) < upfront) throw new GameError(`Need ${upfront} ${CURRENCY_SYMBOL} (incl. ${travel.cost} ${CURRENCY_SYMBOL} ${travel.label.toLowerCase()} fare)`);
-  mt_burn(state, hh.accountId, CURRENCY, travel.cost, `travel:${mode}`);
+  if (travel.cost) mt_burn(state, hh.accountId, CURRENCY, travel.cost, `travel:${mode}`);
   if (action.cost) mt_burn(state, hh.accountId, CURRENCY, action.cost, `place:${place.id}:${action.id}`);
   if (action.special === "repay") {
     mt_burn(state, hh.accountId, CURRENCY, hh.debt ?? 0, "burrow:repay");
@@ -206,14 +210,15 @@ export function startPlaceAction(state: GameState, hh: Household, c: Character, 
   const arriveAt = now + travel.seconds * 1000;
   c.busy = {
     action: placeActionId(place.id, action.id),
-    label: `${lcFirst(action.label)} at ${place.short}`,
+    label: `at ${place.short}: ${lcFirst(action.label)}`,
     startedAt: now,
     arriveAt,
     until: arriveAt + action.durationSec * 1000,
     place: place.id,
-    travel: mode,
+    travel: here ? undefined : mode,
   };
   hh.lastActive = now;
+  if (here) return;
   addActivity(state, {
     ...who(hh),
     ts: now,
@@ -227,6 +232,8 @@ function completePlaceAction(state: GameState, hh: Household, c: Character, plac
   const place = PLACE_BY_ID[placeId];
   const action = place.actions.find((a) => a.id === actionId)!;
   applyEffects(c, action.effects);
+  c.location = place.id;
+  if (action.id === "hang") return;
   let result = "";
   if (action.payout) {
     const [lo, hi] = action.payout;
@@ -245,6 +252,13 @@ function completePlaceAction(state: GameState, hh: Household, c: Character, plac
     emoji: place.emoji,
     text: `${c.name} (${hh.name}) ${action.emoji} ${lcFirst(action.label)} at ${place.name}${result}`,
   });
+}
+
+/** Bring a Sim home from a city place. */
+export function goHome(hh: Household, c: Character, now: number) {
+  if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  c.location = null;
+  hh.lastActive = now;
 }
 
 /** Send SimBucks to another household (NEP-245 mt_transfer). */
@@ -276,6 +290,7 @@ export function useItem(state: GameState, hh: Household, c: Character, itemId: s
   if (!item || !item.effects) throw new GameError("That item can't be used directly");
   if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
   mt_burn(state, hh.accountId, itemId, 1, `use:${c.name}`);
+  c.location = null;
   applyEffects(c, item.effects);
   c.busy = { action: `use:${itemId}`, label: `enjoying ${item.name}`, startedAt: now, until: now + 5000, itemId };
   hh.lastActive = now;
