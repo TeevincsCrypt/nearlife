@@ -2,7 +2,8 @@
  * Core simulation: needs decay, actions, inventory use, market listings and purchases.
  * All functions mutate a GameState in place and are called inside mutateState().
  */
-import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS } from "./catalog";
+import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS, WORLD_EVENTS, WORLD_EVENT_MS, type WorldEventDef } from "./catalog";
+import { canPlace, findFreeSpot, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
 import { ESCROW_ACCOUNT, LedgerError, inventoryOf, mt_balance_of, mt_burn, mt_mint, mt_transfer } from "./nep245";
 import { runNpcTick } from "./npc-agent";
 import type { ActivityEvent, Character, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
@@ -72,15 +73,29 @@ function who(hh: Household) {
 // Actions
 // ---------------------------------------------------------------------------
 
-export function startAction(state: GameState, hh: Household, c: Character, actionId: string, now: number) {
+export function currentEvent(state: GameState): WorldEventDef {
+  return WORLD_EVENTS.find((e) => e.id === state.worldEvent?.id) ?? WORLD_EVENTS[0];
+}
+
+export function startAction(state: GameState, hh: Household, c: Character, actionId: string, now: number, furnitureUidHint?: string) {
   const action = ACTIONS[actionId];
   if (!action) throw new GameError("Unknown action");
   if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  let at: string | undefined;
+  if (action.requires) {
+    const ev = currentEvent(state);
+    const options = furnitureFor(hh.layout ?? [], action.requires, ev.powerCut);
+    if (!options.length) {
+      const anyUnpowered = furnitureFor(hh.layout ?? [], action.requires, false).length > 0;
+      throw new GameError(anyUnpowered ? `${ev.emoji} ${ev.title}: no electricity for that right now` : `You need furniture for that (buy it in Buy mode)`);
+    }
+    at = (options.find((o) => o.uid === furnitureUidHint) ?? options[0]).uid;
+  }
   if (action.cost > 0) {
     if (balanceOf(state, hh) < action.cost) throw new GameError(`Need ${action.cost} ${CURRENCY_SYMBOL}`);
     mt_burn(state, hh.accountId, CURRENCY, action.cost, `${action.id}:supplies`);
   }
-  c.busy = { action: action.id, label: action.verb, startedAt: now, until: now + action.durationSec * 1000 };
+  c.busy = { action: action.id, label: action.verb, startedAt: now, until: now + action.durationSec * 1000, at };
   if (hh.kind === "player") {
     hh.lastActive = now;
     if (action.category !== "care") {
@@ -104,15 +119,16 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
 
   applyEffects(c, action.effects);
 
-  // Furniture bonuses
-  for (const item of Object.values(ITEMS)) {
-    if (item.bonus && item.bonus.action === action.id && owns(state, hh, item.id)) {
-      applyEffects(c, { [item.bonus.need]: item.bonus.amount });
-    }
+  // Furniture bonus (e.g. Comfy Bed, Bathtub, Arcade) applies to the main need of the action.
+  const used = busy.at ? (hh.layout ?? []).find((p) => p.uid === busy.at) : undefined;
+  const bonus = used ? ITEMS[used.itemId]?.furniture?.bonus : undefined;
+  if (bonus) {
+    const main = (Object.entries(action.effects).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0]?.[0] ?? "fun") as NeedKey;
+    applyEffects(c, { [main]: bonus });
   }
 
   if (action.pay) {
-    const factor = 0.5 + 0.5 * (moodOf(c) / 100);
+    const factor = (0.5 + 0.5 * (moodOf(c) / 100)) * (currentEvent(state).workPay ?? 1);
     const pay = Math.max(5, Math.round(action.pay * factor));
     mt_mint(state, hh.accountId, CURRENCY, pay, `wage:${c.name}`);
     if (hh.kind === "player") {
@@ -182,6 +198,10 @@ export function createListing(state: GameState, hh: Household, itemId: string, q
   if (!item || item.kind === "currency") throw new GameError("Unknown item");
   if (!Number.isInteger(quantity) || quantity < 1) throw new GameError("Quantity must be at least 1");
   if (!Number.isInteger(price) || price < 1 || price > MAX_LISTING_PRICE) throw new GameError(`Price must be 1–${MAX_LISTING_PRICE} ${CURRENCY_SYMBOL}`);
+  if (item.kind === "furniture") {
+    const free = mt_balance_of(state, hh.accountId, itemId) - placedCount(hh.layout ?? [], itemId);
+    if (free < quantity) throw new GameError(`Put the ${item.name} in storage first (only ${Math.max(0, free)} not placed)`);
+  }
   // Escrow the tokens with the market account until sold or cancelled.
   mt_transfer(state, hh.accountId, ESCROW_ACCOUNT, itemId, quantity, `list:${itemId}`);
   const listing: Listing = {
@@ -278,11 +298,126 @@ export function logPurchase(
 }
 
 // ---------------------------------------------------------------------------
+// Home furniture (Buy mode)
+// ---------------------------------------------------------------------------
+
+function furnitureItem(itemId: string) {
+  const item = ITEMS[itemId];
+  if (!item?.furniture) throw new GameError("That isn't furniture");
+  return item;
+}
+
+/** Buy from the catalogue (SimBucks are burned by the store) and place it. */
+export function buyFurniture(state: GameState, hh: Household, itemId: string, x: number, z: number, rot: number, now: number) {
+  const item = furnitureItem(itemId);
+  const price = item.furniture!.storePrice;
+  if (!canPlace(hh.layout, itemId, x, z, rot)) throw new GameError("It doesn't fit there");
+  if (balanceOf(state, hh) < price) throw new GameError(`Need ${price} ${CURRENCY_SYMBOL}`);
+  mt_burn(state, hh.accountId, CURRENCY, price, `store:${itemId}`);
+  mt_mint(state, hh.accountId, itemId, 1, "store-purchase");
+  const placed = { uid: furnitureUid(), itemId, x, z, rot };
+  hh.layout.push(placed);
+  hh.lastActive = now;
+  addActivity(state, { ...who(hh), ts: now, type: "action", emoji: item.emoji, amount: price, text: `${hh.name} bought a ${item.name} for their home (${price} ${CURRENCY_SYMBOL})` });
+  return placed;
+}
+
+/** Place a piece the household owns but hasn't placed (e.g. bought on the market or crafted). */
+export function placeOwnedFurniture(state: GameState, hh: Household, itemId: string, x: number, z: number, rot: number, now: number) {
+  furnitureItem(itemId);
+  if (mt_balance_of(state, hh.accountId, itemId) - placedCount(hh.layout, itemId) < 1) throw new GameError("You don't have one in storage");
+  if (!canPlace(hh.layout, itemId, x, z, rot)) throw new GameError("It doesn't fit there");
+  const placed = { uid: furnitureUid(), itemId, x, z, rot };
+  hh.layout.push(placed);
+  hh.lastActive = now;
+  return placed;
+}
+
+export function moveFurniture(hh: Household, uidToMove: string, x: number, z: number, rot: number, now: number) {
+  const p = hh.layout.find((f) => f.uid === uidToMove);
+  if (!p) throw new GameError("Furniture not found");
+  if (!canPlace(hh.layout, p.itemId, x, z, rot, p.uid)) throw new GameError("It doesn't fit there");
+  Object.assign(p, { x, z, rot });
+  hh.lastActive = now;
+}
+
+function releaseUsers(hh: Household, furnitureUidToFree: string) {
+  for (const c of hh.characters) if (c.busy?.at === furnitureUidToFree) c.busy = null;
+}
+
+/** Remove from the room; the NEP-245 token stays in the account (can be re-placed or listed). */
+export function storeFurniture(hh: Household, uidToStore: string, now: number) {
+  const i = hh.layout.findIndex((f) => f.uid === uidToStore);
+  if (i < 0) throw new GameError("Furniture not found");
+  releaseUsers(hh, uidToStore);
+  hh.layout.splice(i, 1);
+  hh.lastActive = now;
+}
+
+/** Sell a placed piece back to the store for half the catalogue price (token is burned). */
+export function sellBackFurniture(state: GameState, hh: Household, uidToSell: string, now: number) {
+  const p = hh.layout.find((f) => f.uid === uidToSell);
+  if (!p) throw new GameError("Furniture not found");
+  const item = furnitureItem(p.itemId);
+  const refund = Math.floor(item.furniture!.storePrice / 2);
+  storeFurniture(hh, uidToSell, now);
+  mt_burn(state, hh.accountId, p.itemId, 1, "store-buyback");
+  mt_mint(state, hh.accountId, CURRENCY, refund, "store-buyback");
+  return refund;
+}
+
+/** NPCs drop newly bought furniture into the first free spot. */
+export function autoPlace(hh: Household, itemId: string) {
+  const spot = findFreeSpot(hh.layout, itemId);
+  if (spot) hh.layout.push({ uid: furnitureUid(), itemId, ...spot });
+}
+
+export const TOPUP_AMOUNT = 100;
+export const TOPUP_COOLDOWN_MS = 5 * 60_000;
+
+/** Testnet faucet: mint SimBucks to a player household, rate-limited. */
+export function topUp(state: GameState, hh: Household, now: number) {
+  const wait = (hh.lastTopup ?? 0) + TOPUP_COOLDOWN_MS - now;
+  if (wait > 0) throw new GameError(`Faucet refills in ${Math.ceil(wait / 60_000)} min`);
+  hh.lastTopup = now;
+  mt_mint(state, hh.accountId, CURRENCY, TOPUP_AMOUNT, "testnet-faucet");
+  return TOPUP_AMOUNT;
+}
+
+// ---------------------------------------------------------------------------
 // Time
 // ---------------------------------------------------------------------------
 
-function decay(c: Character, minutes: number) {
-  for (const k of NEED_KEYS) c.needs[k] = clamp(c.needs[k] - DECAY_PER_MIN[k] * minutes);
+function decay(c: Character, minutes: number, mult: Partial<Needs> = {}) {
+  for (const k of NEED_KEYS) c.needs[k] = clamp(c.needs[k] - DECAY_PER_MIN[k] * (mult[k] ?? 1) * minutes);
+}
+
+/** Bring older saved worlds up to date (layouts, looks, events). */
+function migrate(state: GameState, now: number) {
+  for (const hh of Object.values(state.households)) {
+    if (!hh.layout) {
+      hh.layout = starterLayout();
+      for (const p of hh.layout) mt_mint(state, hh.accountId, p.itemId, 1, "home-furniture");
+    }
+  }
+  if (!state.worldEvent) state.worldEvent = { id: "calm", startedAt: now, endsAt: now + WORLD_EVENT_MS };
+}
+
+function rotateWorldEvent(state: GameState, now: number) {
+  if (state.worldEvent && state.worldEvent.endsAt > now) return;
+  const prev = state.worldEvent?.id;
+  const pool = WORLD_EVENTS.filter((e) => e.id !== prev);
+  let r = Math.random() * pool.reduce((s, e) => s + e.weight, 0);
+  let next = pool[0];
+  for (const e of pool) {
+    r -= e.weight;
+    if (r <= 0) {
+      next = e;
+      break;
+    }
+  }
+  state.worldEvent = { id: next.id, startedAt: now, endsAt: now + WORLD_EVENT_MS };
+  addActivity(state, { ts: now, type: "system", emoji: next.emoji, text: `${next.title}: ${next.description}` });
 }
 
 /** Fast-forward NPC needs (used by the manual "NPC tick" button so judges don't have to wait). */
@@ -298,12 +433,15 @@ export function fastForwardNpcs(state: GameState, minutes: number, now: number) 
 
 /** Advance the world to `now`: decay needs, finish actions, run NPC agents if due. */
 export function advance(state: GameState, now: number, opts: { forceNpcTick?: boolean } = {}) {
+  migrate(state, now);
+  rotateWorldEvent(state, now);
+  const mult = currentEvent(state).decay;
   const dt = Math.min(Math.max(0, now - state.lastAdvance), MAX_CATCHUP_MS);
   const minutes = dt / 60_000;
   for (const hh of Object.values(state.households)) {
     const frozen = hh.kind === "player" && now - hh.lastActive > PLAYER_IDLE_FREEZE_MS;
     for (const c of hh.characters) {
-      if (!frozen) decay(c, minutes);
+      if (!frozen) decay(c, minutes, mult);
       if (c.busy && c.busy.until <= now) completeAction(state, hh, c, now);
     }
   }
@@ -356,6 +494,7 @@ export function snapshot(
     listings: Object.values(state.listings).sort((a, b) => b.createdAt - a.createdAt),
     activity: state.activity.slice(0, 60),
     stats: { ...state.stats, tickCount: state.tickCount, lastNpcTick: state.lastNpcTick },
+    worldEvent: state.worldEvent ?? null,
     me: userId ? { userId, householdId: state.players[userId] ?? null } : null,
     config,
   };

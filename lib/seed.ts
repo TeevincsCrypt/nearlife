@@ -1,7 +1,18 @@
 import { deriveImplicitAccount } from "./accounts";
 import { CURRENCY, ITEMS } from "./catalog";
 import { mt_mint } from "./nep245";
-import type { Character, GameState, Household, NpcRole } from "./types";
+import { FLOOR_COLORS, WALL_COLORS, npcLayout } from "./layout";
+import { randomLook } from "./looks";
+import type { Character, CharacterLook, GameState, Household, NpcRole, PlacedFurniture } from "./types";
+
+export { CLOTHES, HAIR_COLORS, HAIR_STYLES, SKIN_TONES, randomLook } from "./looks";
+
+/** Mint one NEP-245 furniture token per placed piece so the layout is backed by real balances. */
+export function mintLayout(state: GameState, accountId: string, layout: PlacedFurniture[]) {
+  const counts: Record<string, number> = {};
+  for (const p of layout) counts[p.itemId] = (counts[p.itemId] ?? 0) + 1;
+  for (const [itemId, qty] of Object.entries(counts)) mt_mint(state, accountId, itemId, qty, "home-furniture");
+}
 
 interface NpcSeed {
   id: string;
@@ -47,7 +58,7 @@ export const NPC_SEEDS: NpcSeed[] = [
     role: "artisan",
     color: "#0891b2",
     balance: 150,
-    stock: { comfy_bed: 1, spa_session: 2 },
+    stock: { armchair: 1, spa_session: 2 },
     members: [["Ivan", "👨🏼‍🔧"], ["Nadia", "👩🏼"]],
   },
   {
@@ -64,12 +75,19 @@ function rand(min: number, max: number) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-export function newCharacter(id: string, name: string, avatar: string, needsRange: [number, number] = [70, 95]): Character {
+export function newCharacter(
+  id: string,
+  name: string,
+  avatar: string,
+  needsRange: [number, number] = [70, 95],
+  look: CharacterLook = randomLook(),
+): Character {
   const [lo, hi] = needsRange;
   return {
     id,
     name,
     avatar,
+    look,
     needs: {
       hunger: rand(lo, hi),
       energy: rand(lo, hi),
@@ -94,6 +112,7 @@ export function createInitialState(now: number): GameState {
     activity: [],
     nep245Log: [],
     nep245Seq: 0,
+    worldEvent: { id: "calm", startedAt: now, endsAt: now + 2 * 60_000 },
     settlements: [],
     players: {},
     stats: { trades: 0, volume: 0, npcBuysFromPlayers: 0, playerBuysFromNpcs: 0, playerToPlayer: 0 },
@@ -116,9 +135,13 @@ export function createInitialState(now: number): GameState {
       createdAt: now,
       lastActive: now,
       priceMemory: {},
+      layout: npcLayout(seed.role),
+      wallColor: WALL_COLORS[NPC_SEEDS.indexOf(seed) % WALL_COLORS.length],
+      floorColor: FLOOR_COLORS[NPC_SEEDS.indexOf(seed) % FLOOR_COLORS.length],
     };
     state.households[hh.id] = hh;
     mt_mint(state, hh.accountId, CURRENCY, seed.balance, "genesis");
+    mintLayout(state, hh.accountId, hh.layout);
     for (const [itemId, qty] of Object.entries(seed.stock ?? {})) {
       mt_mint(state, hh.accountId, itemId, qty, "genesis");
     }

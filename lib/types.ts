@@ -12,12 +12,32 @@ export interface BusyState {
   until: number;
   /** Item consumed/used, if any (for display). */
   itemId?: string;
+  /** uid of the placed furniture being used (for the 3D view). */
+  at?: string;
+}
+
+export interface CharacterLook {
+  skin: string;
+  hair: string;
+  hairStyle: "short" | "long" | "afro" | "bald" | "bun";
+  top: string;
+  bottom: string;
+}
+
+export interface PlacedFurniture {
+  uid: string;
+  itemId: string;
+  x: number;
+  z: number;
+  /** Quarter turns (0-3). */
+  rot: number;
 }
 
 export interface Character {
   id: string;
   name: string;
   avatar: string;
+  look?: CharacterLook;
   needs: Needs;
   busy?: BusyState | null;
   /** Last decision an NPC agent made, shown in the UI. */
@@ -41,6 +61,11 @@ export interface Household {
   lastActive: number;
   /** NPC pricing memory per item id (dynamic pricing). */
   priceMemory?: Record<string, number>;
+  /** Furniture placed in the home (8×8 grid). */
+  layout: PlacedFurniture[];
+  wallColor?: string;
+  floorColor?: string;
+  lastTopup?: number;
 }
 
 export interface Listing {
@@ -121,6 +146,7 @@ export interface GameState {
   settlements: Array<{ ts: number; seq: number; txHash?: string; error?: string }>;
   /** userId -> householdId */
   players: Record<string, string>;
+  worldEvent?: { id: string; startedAt: number; endsAt: number };
   stats: {
     trades: number;
     volume: number;
@@ -143,6 +169,7 @@ export interface StateSnapshot {
   listings: Listing[];
   activity: ActivityEvent[];
   stats: GameState["stats"] & { tickCount: number; lastNpcTick: number };
+  worldEvent: { id: string; startedAt: number; endsAt: number } | null;
   me: { userId: string; householdId: string | null } | null;
   config: {
     auth: "privy" | "guest" | "privy+guest";

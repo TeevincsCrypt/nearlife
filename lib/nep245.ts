@@ -48,7 +48,7 @@ export function mt_metadata(tokenIds: string[]) {
     return item
       ? {
           base: { id, name: item.name, symbol: id.toUpperCase(), decimals: 0, icon: item.emoji },
-          token: { title: item.name, description: item.description, extra: JSON.stringify({ kind: item.kind, effects: item.effects ?? null, bonus: item.bonus ?? null }) },
+          token: { title: item.name, description: item.description, extra: JSON.stringify({ kind: item.kind, effects: item.effects ?? null, furniture: item.furniture ?? null }) },
         }
       : null;
   });

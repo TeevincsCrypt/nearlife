@@ -10,10 +10,12 @@
  *   3. Unsold NPC listings get cheaper over time; listings that sell out quickly raise the
  *      next price (simple supply/demand).
  */
-import { ACTIONS, CURRENCY_SYMBOL, FURNITURE_IDS, ITEMS, NEED_FALLBACK, NEED_META, ROLE_PRODUCTION } from "./catalog";
+import { ACTIONS, CRAFTABLE, CURRENCY_SYMBOL, ITEMS, NEED_FALLBACK, NEED_META, ROLE_PRODUCTION } from "./catalog";
 import {
   addActivity,
+  autoPlace,
   balanceOf,
+  currentEvent,
   buyListing,
   createListing,
   GameError,
@@ -23,6 +25,7 @@ import {
   startAction,
   useItem,
 } from "./engine";
+import { placedCount } from "./layout";
 import { LedgerError, mt_balance_of } from "./nep245";
 import type { Character, GameState, Household, Listing, NeedKey } from "./types";
 import { NEED_KEYS } from "./types";
@@ -82,7 +85,7 @@ function tryStart(state: GameState, hh: Household, c: Character, actionId: strin
  * to a home action for its lowest need.
  */
 function satisfyNeeds(state: GameState, hh: Household, c: Character, now: number): boolean {
-  const threshold = balanceOf(state, hh) > RICH ? BUY_THRESHOLD_RICH : BUY_THRESHOLD;
+  const threshold = (balanceOf(state, hh) > RICH ? BUY_THRESHOLD_RICH : BUY_THRESHOLD) + (currentEvent(state).buyBoost ?? 0);
   const low = NEED_KEYS.map((k) => [k, c.needs[k]] as const)
     .filter(([, v]) => v < threshold)
     .sort((a, b) => a[1] - b[1]);
@@ -134,7 +137,8 @@ function listProduction(state: GameState, hh: Household, now: number) {
     }),
   );
   for (const itemId of productIds) {
-    const qty = mt_balance_of(state, hh.accountId, itemId);
+    // Never sell furniture the household is using.
+    const qty = mt_balance_of(state, hh.accountId, itemId) - placedCount(hh.layout ?? [], itemId);
     if (qty < 1) continue;
     createListing(state, hh, itemId, qty, priceFor(hh, itemId), now);
   }
@@ -186,14 +190,15 @@ function idleDecision(state: GameState, hh: Household, c: Character, isFirstIdle
   }
 
   if (money > RICH) {
-    const wanted = FURNITURE_IDS.find((f) => !owns(state, hh, f));
+    const wanted = CRAFTABLE.find((f) => !owns(state, hh, f));
     if (wanted) {
       const listing = Object.values(state.listings)
         .filter((l) => l.itemId === wanted && l.sellerHouseholdId !== hh.id && l.price <= money - 30)
         .sort((a, b) => a.price - b.price)[0];
       if (listing) {
         const { seller, item } = buyListing(state, hh, listing.id, now);
-        c.thought = `${money} ${CURRENCY_SYMBOL} saved → bought a ${item.name}`;
+        autoPlace(hh, item.id);
+        c.thought = `${money} ${CURRENCY_SYMBOL} saved → bought a ${item.name} for the house`;
         logPurchase(state, hh, seller, item.id, listing.price, now, `${c.name} (${hh.name}, NPC) treated the house and`);
         return;
       }

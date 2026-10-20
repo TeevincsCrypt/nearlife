@@ -8,6 +8,7 @@ import { advance, createListing, startAction } from "../lib/engine";
 import { CURRENCY } from "../lib/catalog";
 import { mt_balance_of, mt_mint, mt_supply } from "../lib/nep245";
 import type { Household } from "../lib/types";
+import { starterLayout } from "../lib/layout";
 
 const minutes = Number(process.argv[2] ?? 20);
 let now = Date.now();
@@ -25,6 +26,7 @@ const player: Household = {
   characters: [newCharacter("hh_sim-0", "Chef Sim", "🧑‍🍳")],
   createdAt: now,
   lastActive: now,
+  layout: starterLayout(),
 };
 state.households[player.id] = player;
 mt_mint(state, player.accountId, CURRENCY, 100, "welcome-grant");
