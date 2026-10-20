@@ -33,16 +33,41 @@ export function explorerAccountUrl(accountId: string) {
   return NEAR_NETWORK === "mainnet" ? `https://nearblocks.io/address/${accountId}` : `https://testnet.nearblocks.io/address/${accountId}`;
 }
 
-let provider: JsonRpcProvider | null = null;
-function getProvider() {
-  provider ??= new JsonRpcProvider({ url: NEAR_RPC_URL });
-  return provider;
+export type Network = "testnet" | "mainnet";
+
+const RPC: Record<Network, string> = {
+  testnet: NEAR_NETWORK === "testnet" ? NEAR_RPC_URL : "https://rpc.testnet.near.org",
+  mainnet: NEAR_NETWORK === "mainnet" ? NEAR_RPC_URL : "https://rpc.mainnet.near.org",
+};
+const providers: Partial<Record<Network, JsonRpcProvider>> = {};
+function getProvider(network: Network = NEAR_NETWORK as Network) {
+  return (providers[network] ??= new JsonRpcProvider({ url: RPC[network] ?? NEAR_RPC_URL }));
+}
+
+export function explorerFor(network: Network) {
+  return network === "mainnet" ? "https://nearblocks.io" : "https://testnet.nearblocks.io";
+}
+
+/** Latest block and gas price straight from NEAR RPC. */
+export async function getNetworkStatus(network: Network = NEAR_NETWORK as Network) {
+  const p = getProvider(network);
+  const [status, gas] = await Promise.all([p.viewNodeStatus(), p.viewGasPrice()]);
+  const s = status as unknown as { chain_id: string; sync_info: { latest_block_height: number; latest_block_time: string; latest_block_hash: string } };
+  return {
+    network,
+    chainId: s.chain_id,
+    blockHeight: s.sync_info.latest_block_height,
+    blockTime: s.sync_info.latest_block_time,
+    blockHash: s.sync_info.latest_block_hash,
+    gasPrice: String((gas as unknown as { gas_price: string | bigint }).gas_price),
+    explorer: explorerFor(network),
+  };
 }
 
 /** Native NEAR balance (yoctoNEAR string). Throws if the RPC itself is unreachable. */
-export async function getNativeBalance(accountId: string): Promise<{ exists: boolean; yocto: string }> {
+export async function getNativeBalance(accountId: string, network: Network = NEAR_NETWORK as Network): Promise<{ exists: boolean; yocto: string }> {
   try {
-    const view = await getProvider().viewAccount({ accountId });
+    const view = await getProvider(network).viewAccount({ accountId });
     return { exists: true, yocto: String(view.amount) };
   } catch (e) {
     const msg = String((e as Error)?.message ?? e);

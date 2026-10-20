@@ -1,9 +1,10 @@
 "use client";
 
 import { ACTIONS, ITEMS } from "@/lib/catalog";
+import { PLACES, PLACE_BY_ID, TRAVEL } from "@/lib/places";
 import type { HouseholdView } from "@/lib/types";
 import { AnchoredLabel } from "../three/anchors";
-import { cityPlacement, type Landmark } from "../three/City";
+import { cityPlacement, type Landmark, type Trip } from "../three/City";
 
 function Pin({
   emoji,
@@ -37,6 +38,23 @@ function Pin({
   );
 }
 
+function PlacePin({ emoji, label, color, onClick }: { emoji: string; label: string; color: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="pointer-events-auto flex cursor-pointer flex-col items-center" style={{ WebkitTapHighlightColor: "transparent" }}>
+      <span
+        className="flex items-center gap-1.5 rounded-xl py-1 pr-2.5 pl-1 text-[11px] font-bold whitespace-nowrap text-white"
+        style={{ background: "rgba(10,12,24,0.85)", boxShadow: `0 0 0 1px ${color}aa, 0 0 14px ${color}55` }}
+      >
+        <span className="flex size-6 items-center justify-center rounded-lg text-sm" style={{ background: `${color}2a`, color }}>
+          {emoji}
+        </span>
+        {label}
+      </span>
+      <span className="h-2.5 w-px" style={{ background: color }} />
+    </button>
+  );
+}
+
 /** Tappable pins over the 3D city map. */
 export function CityMarkers({
   households,
@@ -45,6 +63,8 @@ export function CityMarkers({
   listingsCount,
   onHouse,
   onLandmark,
+  onPlace,
+  trips = [],
 }: {
   households: HouseholdView[];
   myHouseholdId?: string | null;
@@ -52,6 +72,8 @@ export function CityMarkers({
   listingsCount: number;
   onHouse: (h: HouseholdView) => void;
   onLandmark: (l: Landmark) => void;
+  onPlace: (placeId: string) => void;
+  trips?: Array<Trip & { label: string }>;
 }) {
   const placed = cityPlacement(households);
   return (
@@ -62,9 +84,18 @@ export function CityMarkers({
       <AnchoredLabel id="lm:office">
         <Pin emoji="💼" label="Work Hub" sub="Take a shift" color="#22d3ee" onClick={() => onLandmark("office")} />
       </AnchoredLabel>
-      <AnchoredLabel id="lm:park">
-        <Pin emoji="⛲" label="Plaza" sub="Call a neighbor" color="#a78bfa" onClick={() => onLandmark("park")} />
-      </AnchoredLabel>
+      {PLACES.map((p) => (
+        <AnchoredLabel key={p.id} id={`pl:${p.id}`}>
+          <PlacePin emoji={p.emoji} label={p.short} color={p.color} onClick={() => onPlace(p.id)} />
+        </AnchoredLabel>
+      ))}
+      {trips.map((t) => (
+        <AnchoredLabel key={t.id} id={`trip:${t.id}`}>
+          <div className="glass rounded-lg px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap">
+            {TRAVEL[t.mode].emoji} {t.label}
+          </div>
+        </AnchoredLabel>
+      ))}
       {placed.map(({ h }) => {
         const mine = h.id === myHouseholdId;
         const online = now - h.lastActive < 60_000;
@@ -92,7 +123,7 @@ export function CharacterBubbles({ household, now }: { household: HouseholdView;
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {household.characters.map((c) => {
         const busy = c.busy && c.busy.until > now ? c.busy : null;
-        const emoji = busy ? (busy.itemId ? ITEMS[busy.itemId]?.emoji : ACTIONS[busy.action]?.emoji) : null;
+        const emoji = busy ? (busy.itemId ? ITEMS[busy.itemId]?.emoji : busy.place ? PLACE_BY_ID[busy.place]?.emoji : ACTIONS[busy.action]?.emoji) : null;
         return (
           <AnchoredLabel key={c.id} id={`char:${c.id}`}>
             {emoji ? (

@@ -4,6 +4,7 @@
  */
 import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS, WORLD_EVENTS, WORLD_EVENT_MS, type WorldEventDef } from "./catalog";
 import { FLOOR_COLORS, WALL_COLORS, canPlace, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
+import { BURROW_LOAN, BURROW_REPAY, PLACE_BY_ID, TRAVEL, parsePlaceAction, placeActionId, type TravelMode } from "./places";
 import { ESCROW_ACCOUNT, LedgerError, inventoryOf, mt_balance_of, mt_burn, mt_mint, mt_transfer } from "./nep245";
 import type { ActivityEvent, Character, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
 import { NEED_KEYS } from "./types";
@@ -112,6 +113,8 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
   const busy = c.busy;
   c.busy = null;
   if (!busy) return;
+  const trip = parsePlaceAction(busy.action);
+  if (trip) return completePlaceAction(state, hh, c, trip.place.id, trip.action.id, now);
   const action = ACTIONS[busy.action];
   if (!action) return; // item use or unknown: effects were applied at start
 
@@ -169,6 +172,102 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
       });
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// City places (travel by car / train / plane)
+// ---------------------------------------------------------------------------
+
+/** "Swap tokens" -> "swap tokens", but keeps "SB", "EVM" etc. intact. */
+const lcFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+
+export function startPlaceAction(state: GameState, hh: Household, c: Character, placeId: string, actionId: string, mode: TravelMode, now: number) {
+  const place = PLACE_BY_ID[placeId];
+  const action = place?.actions.find((a) => a.id === actionId);
+  const travel = TRAVEL[mode];
+  if (!place || !action) throw new GameError("Unknown place");
+  if (!travel) throw new GameError("Pick car, train or plane");
+  if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  if (action.special === "borrow" && (hh.debt ?? 0) > 0) throw new GameError(`Repay your Burrow loan (${hh.debt} SB) first`);
+  if (action.special === "repay" && !(hh.debt ?? 0)) throw new GameError("You don't owe Burrow anything");
+  const upfront = travel.cost + action.cost + (action.special === "repay" ? (hh.debt ?? 0) : 0);
+  if (balanceOf(state, hh) < upfront) throw new GameError(`Need ${upfront} ${CURRENCY_SYMBOL} (incl. ${travel.cost} ${CURRENCY_SYMBOL} ${travel.label.toLowerCase()} fare)`);
+  mt_burn(state, hh.accountId, CURRENCY, travel.cost, `travel:${mode}`);
+  if (action.cost) mt_burn(state, hh.accountId, CURRENCY, action.cost, `place:${place.id}:${action.id}`);
+  if (action.special === "repay") {
+    mt_burn(state, hh.accountId, CURRENCY, hh.debt ?? 0, "burrow:repay");
+    hh.debt = 0;
+  }
+  if (action.special === "borrow") {
+    mt_mint(state, hh.accountId, CURRENCY, BURROW_LOAN, "burrow:loan");
+    hh.debt = BURROW_REPAY;
+  }
+  applyEffects(c, travel.effects);
+  const arriveAt = now + travel.seconds * 1000;
+  c.busy = {
+    action: placeActionId(place.id, action.id),
+    label: `${lcFirst(action.label)} at ${place.short}`,
+    startedAt: now,
+    arriveAt,
+    until: arriveAt + action.durationSec * 1000,
+    place: place.id,
+    travel: mode,
+  };
+  hh.lastActive = now;
+  addActivity(state, {
+    ...who(hh),
+    ts: now,
+    type: "action",
+    emoji: travel.emoji,
+    text: `${c.name} (${hh.name}) took the ${travel.label.toLowerCase()} to ${place.name} to ${lcFirst(action.label)}`,
+  });
+}
+
+function completePlaceAction(state: GameState, hh: Household, c: Character, placeId: string, actionId: string, now: number) {
+  const place = PLACE_BY_ID[placeId];
+  const action = place.actions.find((a) => a.id === actionId)!;
+  applyEffects(c, action.effects);
+  let result = "";
+  if (action.payout) {
+    const [lo, hi] = action.payout;
+    const amount = Math.round(lo + Math.random() * (hi - lo));
+    if (amount > 0) mt_mint(state, hh.accountId, CURRENCY, amount, `place:${place.id}:${action.id}`);
+    const net = amount - action.cost;
+    result = action.cost ? ` (${net >= 0 ? "+" : ""}${net} ${CURRENCY_SYMBOL} net)` : ` (+${amount} ${CURRENCY_SYMBOL})`;
+  }
+  if (action.gives) mt_mint(state, hh.accountId, action.gives.itemId, action.gives.qty, `place:${place.id}`);
+  if (action.special === "borrow") result = ` (+${BURROW_LOAN} ${CURRENCY_SYMBOL}, owes ${BURROW_REPAY})`;
+  if (action.special === "repay") result = " (loan repaid)";
+  addActivity(state, {
+    ...who(hh),
+    ts: now,
+    type: "action",
+    emoji: place.emoji,
+    text: `${c.name} (${hh.name}) ${action.emoji} ${lcFirst(action.label)} at ${place.name}${result}`,
+  });
+}
+
+/** Send SimBucks to another household (NEP-245 mt_transfer). */
+export function sendSimBucks(state: GameState, from: Household, toHouseholdId: string, amount: number, now: number) {
+  const to = state.households[toHouseholdId];
+  if (!to || to.id === from.id) throw new GameError("Pick a neighbor to send to");
+  if (!Number.isInteger(amount) || amount < 1 || amount > 10_000) throw new GameError("Amount must be 1–10,000");
+  try {
+    mt_transfer(state, from.accountId, to.accountId, CURRENCY, amount, `gift:${from.id}`);
+  } catch (e) {
+    if (e instanceof LedgerError) throw new GameError(e.message);
+    throw e;
+  }
+  from.lastActive = now;
+  addActivity(state, {
+    ...who(from),
+    ts: now,
+    type: "purchase",
+    emoji: "💸",
+    amount,
+    counterpartyHouseholdId: to.id,
+    text: `${from.name} sent ${amount} ${CURRENCY_SYMBOL} to ${to.name}`,
+  });
 }
 
 /** Consume an owned consumable/service token on a character. */

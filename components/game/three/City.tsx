@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 import { Anchor } from "./anchors";
+import { PLACES, type BuildingStyle, type PlaceDef, type TravelMode } from "@/lib/places";
 import type { ActivityEvent, HouseholdView } from "@/lib/types";
 
 export type Landmark = "market" | "office" | "park";
@@ -15,16 +16,22 @@ const NEON_3 = "#22d3ee";
 const ROADS_X = [-14, 0, 14];
 const ROADS_Z = [-12, 0, 12];
 
-/** House plots sorted by distance from the center. */
+const TRADE_SCREEN: [number, number] = [-3.5, -17];
+/** Railway loop around the town. */
+const RAIL = { x0: -46, x1: 46, z0: -42, z1: 30 };
+const AIRFIELD: [number, number] = [-38, 38];
+
+/** House plots sorted by distance from the center, kept clear of roads, landmarks and places. */
 function plotSlots(): Array<[number, number]> {
   const out: Array<[number, number]> = [];
-  for (let x = -28; x <= 28; x += 4.5) {
-    for (let z = -24; z <= 22; z += 4.5) {
+  const blocked: Array<[number, number]> = [...PLACES.map((p) => p.pos), TRADE_SCREEN];
+  for (let x = -42; x <= 42; x += 4.5) {
+    for (let z = -38; z <= 20; z += 4.5) {
       const nearRoadX = ROADS_X.some((r) => Math.abs(x - r) < 3);
       const nearRoadZ = ROADS_Z.some((r) => Math.abs(z - r) < 3);
       const civic = Math.abs(x) < 12 && Math.abs(z) < 10;
-      const canal = z > 22;
-      if (!nearRoadX && !nearRoadZ && !civic && !canal) out.push([x, z]);
+      const nearPlace = blocked.some(([px, pz]) => Math.abs(x - px) < 5 && Math.abs(z - pz) < 5);
+      if (!nearRoadX && !nearRoadZ && !civic && !nearPlace) out.push([x, z]);
     }
   }
   return out.sort((a, b) => Math.hypot(a[0], a[1] * 1.2) - Math.hypot(b[0], b[1] * 1.2));
@@ -220,39 +227,6 @@ function WorkHub() {
   );
 }
 
-/** Plaza with a neon fountain. */
-function Plaza() {
-  return (
-    <group position={[-7, 0, 5.5]}>
-      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[9, 7]} />
-        <meshStandardMaterial color="#3d6b56" />
-      </mesh>
-      <mesh position={[0.5, 0.15, 0.3]}>
-        <cylinderGeometry args={[1.6, 1.7, 0.3, 32]} />
-        <meshStandardMaterial color="#3a3f55" />
-      </mesh>
-      <mesh position={[0.5, 0.31, 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[1.45, 32]} />
-        <meshStandardMaterial color="#0e7490" emissive="#22d3ee" emissiveIntensity={0.5} />
-      </mesh>
-      <mesh position={[0.5, 0.33, 0.3]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[1.62, 0.04, 8, 48]} />
-        <meshStandardMaterial color={NEON} emissive={NEON} emissiveIntensity={2} toneMapped={false} />
-      </mesh>
-      {[
-        [-3, -2],
-        [-3.3, 1.8],
-        [3.4, -2.4],
-        [3.2, 2.5],
-      ].map((p, i) => (
-        <Tree key={i} p={p as [number, number]} s={1.1} />
-      ))}
-      <Anchor id="lm:park" offsetY={3} scaleRef={40} />
-    </group>
-  );
-}
-
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.split(" ");
   const lines: string[] = [];
@@ -293,7 +267,7 @@ function TradeScreen({ text }: { text: string }) {
     return t;
   }, [text]);
   return (
-    <group position={[7, 0, 5.5]}>
+    <group position={[TRADE_SCREEN[0], 0, TRADE_SCREEN[1]]}>
       <mesh position={[0, 1.6, 0]}>
         <boxGeometry args={[0.3, 3.2, 0.3]} />
         <meshStandardMaterial color="#1f2937" />
@@ -310,6 +284,374 @@ function TradeScreen({ text }: { text: string }) {
   );
 }
 
+/** Building for a named ecosystem place, styled by type, with a neon roof sign. */
+function PlaceBuilding({ place }: { place: PlaceDef }) {
+  const c = place.color;
+  const h = place.height;
+  const body = (w: number, d: number, hh: number, color = "#262b3d") => (
+    <mesh position={[0, hh / 2, 0]} castShadow>
+      <boxGeometry args={[w, hh, d]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
+  const pad = (w: number, d: number, color = "#30354a") => (
+    <mesh position={[0, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[w, d]} />
+      <meshStandardMaterial color={color} />
+    </mesh>
+  );
+  const styles: Record<BuildingStyle, React.ReactNode> = {
+    tower: (
+      <>
+        {pad(5, 5)}
+        {body(3.2, 3.2, h)}
+        {Array.from({ length: Math.floor(h / 1.1) }).map((_, j) => (
+          <Glow key={j} p={[0, 0.8 + j * 1.1, 1.61]} s={[2.8, 0.14, 0.02]} c={c} i={0.9} />
+        ))}
+        <mesh position={[0, h + 0.9, 0]}>
+          <torusGeometry args={[0.7, 0.08, 10, 32]} />
+          <meshStandardMaterial color={c} emissive={c} emissiveIntensity={2.4} toneMapped={false} />
+        </mesh>
+      </>
+    ),
+    office: (
+      <>
+        {pad(5, 4.4)}
+        {body(3.6, 2.8, h, "#2b3245")}
+        {Array.from({ length: Math.floor(h / 1.2) }).map((_, j) => (
+          <Glow key={j} p={[0, 0.8 + j * 1.2, 1.41]} s={[3.2, 0.3, 0.02]} c="#93c5fd" i={0.5} />
+        ))}
+        <Glow p={[0, h + 0.05, 0]} s={[3.62, 0.08, 2.82]} c={c} i={1.6} />
+      </>
+    ),
+    lab: (
+      <>
+        {pad(5, 4.4)}
+        {body(3.6, 3, h * 0.6, "#2a3042")}
+        <mesh position={[0.6, h * 0.6 + 0.6, 0]}>
+          <sphereGeometry args={[1, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color="#1e2433" emissive={c} emissiveIntensity={0.35} />
+        </mesh>
+        <Glow p={[0, h * 0.6, 1.51]} s={[3.6, 0.08, 0.02]} c={c} />
+      </>
+    ),
+    hall: (
+      <>
+        {pad(5.4, 4.6)}
+        {body(4, 3, h * 0.7, "#e2e0ea")}
+        {[-1.5, -0.5, 0.5, 1.5].map((x) => (
+          <mesh key={x} position={[x, h * 0.35, 1.7]}>
+            <cylinderGeometry args={[0.14, 0.14, h * 0.7, 10]} />
+            <meshStandardMaterial color="#f1f0f5" />
+          </mesh>
+        ))}
+        <mesh position={[0, h * 0.7 + 0.5, 0.2]} rotation={[0, Math.PI / 4, 0]}>
+          <coneGeometry args={[3.0, 1, 4]} />
+          <meshStandardMaterial color="#3b3355" />
+        </mesh>
+        <Glow p={[0, h * 0.7, 1.95]} s={[4, 0.06, 0.04]} c={c} />
+      </>
+    ),
+    kiosk: (
+      <>
+        {pad(3.4, 3.4)}
+        {body(1.8, 1.8, 2.2, "#2b2f42")}
+        <mesh position={[0, 2.35, 0]}>
+          <boxGeometry args={[2.4, 0.15, 2.4]} />
+          <meshStandardMaterial color={c} emissive={c} emissiveIntensity={0.8} />
+        </mesh>
+      </>
+    ),
+    pool: (
+      <>
+        {pad(7.5, 5.8, "#cbd5e1")}
+        <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[6, 4.2]} />
+          <meshStandardMaterial color="#0ea5e9" emissive="#22d3ee" emissiveIntensity={0.45} />
+        </mesh>
+        {[-1.4, 0, 1.4].map((z) => (
+          <Glow key={z} p={[0, 0.08, z]} s={[6, 0.02, 0.05]} c="#e0f2fe" i={0.8} />
+        ))}
+        {[-3.2, 3.2].map((x) => (
+          <group key={x} position={[x, 0, -2.4]}>
+            <mesh position={[0, 0.6, 0]}>
+              <cylinderGeometry args={[0.04, 0.04, 1.2]} />
+              <meshStandardMaterial color="#e5e7eb" />
+            </mesh>
+            <mesh position={[0, 1.3, 0]}>
+              <coneGeometry args={[0.7, 0.4, 12]} />
+              <meshStandardMaterial color={x < 0 ? "#f472b6" : "#00ec97"} />
+            </mesh>
+          </group>
+        ))}
+      </>
+    ),
+    datacenter: (
+      <>
+        {pad(6, 4.4)}
+        {body(5, 3, h, "#1f2433")}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Glow key={i} p={[-2.1 + i * 0.6, h * 0.5, 1.51]} s={[0.35, h * 0.7, 0.02]} c={i % 3 ? "#22d3ee" : "#00ec97"} i={0.6} />
+        ))}
+      </>
+    ),
+    store: (
+      <>
+        {pad(5, 4)}
+        {body(3.6, 2.6, h, "#2b2f42")}
+        <mesh position={[0, 1.1, 1.31]}>
+          <planeGeometry args={[3, 1.6]} />
+          <meshStandardMaterial color="#1b2550" emissive={c} emissiveIntensity={0.35} />
+        </mesh>
+        <Glow p={[0, h + 0.1, 1.3]} s={[3.6, 0.5, 0.06]} c={c} i={1.3} />
+      </>
+    ),
+    exchange: (
+      <>
+        {pad(5.4, 4.6)}
+        {body(4, 3.2, h, "#232a3b")}
+        <mesh position={[0, h * 0.6, 1.62]}>
+          <planeGeometry args={[3.4, 1.4]} />
+          <meshStandardMaterial color="#05140e" emissive={c} emissiveIntensity={0.5} />
+        </mesh>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Glow key={i} p={[-1.3 + i * 0.65, h * 0.6 - 0.4 + ((i * 37) % 5) * 0.15, 1.64]} s={[0.4, 0.06, 0.01]} c={i % 2 ? "#fb7185" : "#00ec97"} />
+        ))}
+        <Glow p={[0, h + 0.05, 0]} s={[4.02, 0.08, 3.22]} c={c} i={1.4} />
+      </>
+    ),
+    launchpad: (
+      <>
+        {pad(5, 5, "#2a2433")}
+        <mesh position={[0, 0.3, 0]}>
+          <cylinderGeometry args={[1.8, 2, 0.6, 24]} />
+          <meshStandardMaterial color="#3f3a5a" />
+        </mesh>
+        <mesh position={[0, 2.3, 0]}>
+          <cylinderGeometry args={[0.35, 0.45, 3, 16]} />
+          <meshStandardMaterial color="#f8fafc" />
+        </mesh>
+        <mesh position={[0, 4.1, 0]}>
+          <coneGeometry args={[0.35, 0.8, 16]} />
+          <meshStandardMaterial color={c} emissive={c} emissiveIntensity={0.8} />
+        </mesh>
+        <Glow p={[0, 0.62, 0]} s={[3.2, 0.02, 3.2]} c={c} i={0.6} />
+      </>
+    ),
+    hub: (
+      <>
+        {pad(7, 5.6, "#2f3a4f")}
+        <mesh position={[0, h * 0.5 + 0.1, 0]}>
+          <cylinderGeometry args={[1.2, 1.4, Math.max(0.3, h), 24]} />
+          <meshStandardMaterial color="#2a3042" />
+        </mesh>
+        <mesh position={[0, Math.max(0.3, h) + 0.5, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.6, 0.06, 10, 48]} />
+          <meshStandardMaterial color={c} emissive={c} emissiveIntensity={2} toneMapped={false} />
+        </mesh>
+        {[
+          [-2.6, -1.8],
+          [2.6, 1.8],
+        ].map((p, i) => (
+          <Tree key={i} p={p as [number, number]} s={0.9} />
+        ))}
+      </>
+    ),
+  };
+  return (
+    <group position={[place.pos[0], 0, place.pos[1]]}>
+      {styles[place.style]}
+      <Anchor id={`pl:${place.id}`} offsetY={Math.max(2.4, place.height + 1.6)} scaleRef={40} />
+    </group>
+  );
+}
+
+/** Rail loop around town with a train running on it. */
+function Railway() {
+  const train = useRef<Group>(null);
+  const { x0, x1, z0, z1 } = RAIL;
+  const w = x1 - x0;
+  const d = z1 - z0;
+  const perimeter = 2 * (w + d);
+  useFrame(({ clock }) => {
+    if (!train.current) return;
+    let t = (clock.elapsedTime * 9) % perimeter;
+    let x = x0;
+    let z = z0;
+    let rot = Math.PI / 2;
+    if (t < w) [x, z, rot] = [x0 + t, z0, Math.PI / 2];
+    else if ((t -= w) < d) [x, z, rot] = [x1, z0 + t, 0];
+    else if ((t -= d) < w) [x, z, rot] = [x1 - t, z1, -Math.PI / 2];
+    else [x, z, rot] = [x0, z1 - (t - w), Math.PI];
+    train.current.position.set(x, 0.35, z);
+    train.current.rotation.y = rot;
+  });
+  const sides: Array<[number, number, number, number]> = [
+    [(x0 + x1) / 2, z0, w, 0.5],
+    [(x0 + x1) / 2, z1, w, 0.5],
+    [x0, (z0 + z1) / 2, 0.5, d],
+    [x1, (z0 + z1) / 2, 0.5, d],
+  ];
+  return (
+    <group>
+      {sides.map(([x, z, sw, sd], i) => (
+        <group key={i}>
+          <mesh position={[x, 0.03, z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[sw + 0.8, sd + 0.8]} />
+            <meshStandardMaterial color="#3b3a44" />
+          </mesh>
+          <Glow p={[x, 0.06, z]} s={[sw, 0.02, sd]} c={NEON_2} i={0.9} />
+        </group>
+      ))}
+      {/* stations */}
+      {[
+        [0, z0],
+        [x1, 0],
+        [0, z1],
+        [x0, 0],
+      ].map(([x, z], i) => (
+        <group key={i} position={[x, 0, z]}>
+          <mesh position={[0, 1.2, 0]}>
+            <boxGeometry args={[2.6, 0.12, 2.6]} />
+            <meshStandardMaterial color="#20222e" />
+          </mesh>
+          <Glow p={[0, 1.12, 0]} s={[2.6, 0.04, 2.6]} c={NEON_2} i={1.2} />
+          {[-1.1, 1.1].map((px) => (
+            <mesh key={px} position={[px, 0.6, 0]}>
+              <cylinderGeometry args={[0.06, 0.06, 1.2]} />
+              <meshStandardMaterial color="#64748b" />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      <group ref={train}>
+        <TrainModel />
+      </group>
+    </group>
+  );
+}
+
+function TrainModel() {
+  return (
+    <group>
+      {[0, 1, 2].map((i) => (
+        <group key={i} position={[0, 0, -i * 1.5]}>
+          <mesh>
+            <boxGeometry args={[0.8, 0.6, 1.35]} />
+            <meshStandardMaterial color={i === 0 ? "#e5e7eb" : "#cbd5e1"} />
+          </mesh>
+          <Glow p={[0, 0.08, 0]} s={[0.82, 0.12, 1.36]} c={NEON_2} i={1.2} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function PlaneModel() {
+  return (
+    <group>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <capsuleGeometry args={[0.22, 1.4, 6, 12]} />
+        <meshStandardMaterial color="#f8fafc" />
+      </mesh>
+      <mesh position={[0, 0, 0.1]}>
+        <boxGeometry args={[2.2, 0.05, 0.45]} />
+        <meshStandardMaterial color="#cbd5e1" />
+      </mesh>
+      <mesh position={[0, 0.25, -0.75]}>
+        <boxGeometry args={[0.05, 0.45, 0.35]} />
+        <meshStandardMaterial color={NEON} emissive={NEON} emissiveIntensity={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function CarModel({ color }: { color: string }) {
+  return (
+    <group>
+      <mesh castShadow>
+        <boxGeometry args={[0.6, 0.28, 1.15]} />
+        <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.24, -0.05]}>
+        <boxGeometry args={[0.5, 0.2, 0.6]} />
+        <meshStandardMaterial color="#0f172a" />
+      </mesh>
+      <Glow p={[0, 0, 0.58]} s={[0.45, 0.06, 0.02]} c="#fef3c7" />
+    </group>
+  );
+}
+
+/** An airstrip at the edge of town. */
+function Airfield() {
+  return (
+    <group position={[AIRFIELD[0], 0, AIRFIELD[1]]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[4, 22]} />
+        <meshStandardMaterial color="#2b2f3a" />
+      </mesh>
+      {Array.from({ length: 9 }).map((_, i) => (
+        <Glow key={i} p={[0, 0.05, -10 + i * 2.5]} s={[0.12, 0.02, 1]} c="#fef3c7" i={1} />
+      ))}
+      {[-2.1, 2.1].map((x) => (
+        <Glow key={x} p={[x, 0.05, 0]} s={[0.06, 0.02, 22]} c="#38bdf8" i={1.2} />
+      ))}
+      <mesh position={[4, 1.5, 4]}>
+        <cylinderGeometry args={[0.5, 0.7, 3, 12]} />
+        <meshStandardMaterial color="#e5e7eb" />
+      </mesh>
+      <Glow p={[4, 3.1, 4]} s={[1.3, 0.4, 1.3]} c={NEON_3} i={1.2} />
+      <group position={[0, 0.35, 6]} rotation={[0, Math.PI, 0]}>
+        <PlaneModel />
+      </group>
+    </group>
+  );
+}
+
+export interface Trip {
+  id: string;
+  mode: TravelMode;
+  from: [number, number];
+  to: [number, number];
+  /** Server timestamps (ms). */
+  start: number;
+  arrive: number;
+  until: number;
+  color: string;
+}
+
+/** A Sim's vehicle travelling to (then parked at) a place. Positions are interpolated every frame. */
+function TripVehicle({ trip, clockOffset }: { trip: Trip; clockOffset: number }) {
+  const ref = useRef<Group>(null);
+  useFrame(() => {
+    const g = ref.current;
+    if (!g) return;
+    const now = Date.now() + clockOffset;
+    const t = Math.max(0, Math.min(1, (now - trip.start) / Math.max(1, trip.arrive - trip.start)));
+    const [fx, fz] = trip.from;
+    const [tx, tz] = trip.to;
+    // Park next to the destination so the vehicle doesn't sit inside the building.
+    const px = tx + 2.6;
+    const pz = tz + 2.6;
+    const x = fx + (px - fx) * t;
+    const z = fz + (pz - fz) * t;
+    const y = trip.mode === "plane" ? 0.4 + Math.sin(t * Math.PI) * 14 : trip.mode === "train" ? 0.35 : 0.25;
+    g.position.set(x, y, z);
+    if (t < 1) g.rotation.y = Math.atan2(px - fx, pz - fz);
+    g.visible = now < trip.until;
+  });
+  return (
+    <group ref={ref}>
+      {trip.mode === "plane" ? <PlaneModel /> : trip.mode === "train" ? <TrainModel /> : <CarModel color={trip.color} />}
+      <Anchor id={`trip:${trip.id}`} offsetY={trip.mode === "plane" ? 1 : 1.2} scaleRef={40} />
+    </group>
+  );
+}
+
+export function housePosition(households: HouseholdView[], id: string): [number, number] | null {
+  return cityPlacement(households).find((p) => p.h.id === id)?.pos ?? null;
+}
+
 /** Player households in plot order, so overlay markers can match houses by id. */
 export function cityPlacement(households: HouseholdView[]) {
   return [...households]
@@ -318,43 +660,55 @@ export function cityPlacement(households: HouseholdView[]) {
     .map((h, i) => ({ h, pos: SLOTS[i] }));
 }
 
-export function City({ households, myHouseholdId, latestTrade }: { households: HouseholdView[]; myHouseholdId?: string | null; latestTrade?: ActivityEvent }) {
+export function City({
+  households,
+  myHouseholdId,
+  latestTrade,
+  trips = [],
+  clockOffset = 0,
+}: {
+  households: HouseholdView[];
+  myHouseholdId?: string | null;
+  latestTrade?: ActivityEvent;
+  trips?: Trip[];
+  clockOffset?: number;
+}) {
   const placed = useMemo(() => cityPlacement(households), [households]);
   const open = SLOTS.slice(placed.length, placed.length + OPEN_PLOTS);
   const lamps = useMemo(() => {
     const out: Array<[number, number]> = [];
-    for (const z of ROADS_Z) for (let x = -30; x <= 30; x += 7.5) out.push([x + 1.6, z + 1.6]);
+    for (const z of ROADS_Z) for (let x = -42; x <= 42; x += 7) out.push([x + 1.6, z + 1.6]);
     return out;
   }, []);
 
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[90, 90]} />
+        <planeGeometry args={[130, 130]} />
         <meshStandardMaterial color="#4c7a61" />
       </mesh>
       {/* canal */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0, 34]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[20, 0.0, 44]}>
         <planeGeometry args={[90, 22]} />
         <meshStandardMaterial color="#1d4f86" emissive="#1e3a8a" emissiveIntensity={0.3} />
       </mesh>
-      <Glow p={[0, 0.02, 23.2]} s={[90, 0.03, 0.12]} c={NEON_3} i={1.2} />
+      <Glow p={[20, 0.02, 33.1]} s={[90, 0.03, 0.12]} c={NEON_3} i={1.2} />
       {ROADS_X.map((x) => (
         <group key={`rx${x}`}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, -5]}>
-            <planeGeometry args={[2.4, 56]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, -6]}>
+            <planeGeometry args={[2.4, 72]} />
             <meshStandardMaterial color="#262a36" />
           </mesh>
-          <Glow p={[x, 0.02, -5]} s={[0.06, 0.01, 56]} c={NEON} i={1.1} />
+          <Glow p={[x, 0.02, -6]} s={[0.06, 0.01, 72]} c={NEON} i={1.1} />
         </group>
       ))}
       {ROADS_Z.map((z) => (
         <group key={`rz${z}`}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, z]}>
-            <planeGeometry args={[80, 2.4]} />
+            <planeGeometry args={[92, 2.4]} />
             <meshStandardMaterial color="#262a36" />
           </mesh>
-          <Glow p={[0, 0.022, z]} s={[80, 0.01, 0.06]} c={NEON} i={1.1} />
+          <Glow p={[0, 0.022, z]} s={[92, 0.01, 0.06]} c={NEON} i={1.1} />
         </group>
       ))}
       {lamps.map((p, i) => (
@@ -368,7 +722,14 @@ export function City({ households, myHouseholdId, latestTrade }: { households: H
 
       <Market />
       <WorkHub />
-      <Plaza />
+      {PLACES.map((p) => (
+        <PlaceBuilding key={p.id} place={p} />
+      ))}
+      <Railway />
+      <Airfield />
+      {trips.map((t) => (
+        <TripVehicle key={t.id} trip={t} clockOffset={clockOffset} />
+      ))}
       <TradeScreen text={latestTrade ? `${latestTrade.emoji} ${latestTrade.text}` : "No trades yet. Make something and list it on the night market."} />
 
       {placed.map(({ h, pos }) => (

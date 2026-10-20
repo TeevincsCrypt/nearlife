@@ -12,6 +12,10 @@ export interface BusyState {
   itemId?: string;
   /** uid of the placed furniture being used (for the 3D view). */
   at?: string;
+  /** Trip to a city place: where, how, and when the Sim arrives. */
+  place?: string;
+  travel?: "car" | "train" | "plane";
+  arriveAt?: number;
 }
 
 export interface CharacterLook {
@@ -58,6 +62,8 @@ export interface Household {
   wallColor?: string;
   floorColor?: string;
   lastTopup?: number;
+  /** Outstanding Burrow loan (SimBucks owed). */
+  debt?: number;
 }
 
 export interface Listing {

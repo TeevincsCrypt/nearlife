@@ -22,6 +22,9 @@ Open the deployed URL, or run locally with `npm install && npm run dev` and open
 | 6 | Either player: tap **City** in the dock. | The neighborhood map shows each player's home with a pin (online / recently active / away), empty plots ready for the next player, the Night Market, Work Hub, Plaza and the live trade screen. |
 | 7 | Tap the other player's house. | You walk into their 3D home and see their Sims and furniture. You can shop their listings from there. |
 | 8 | **Build** in the dock → **Fun → TV** → tap the floor → confirm. | The TV is placed (the outline turns green or red to show whether it fits). Tap any piece to move, turn, store or sell it back. |
+| 9 | **City**, then tap the **Ref Finance** pin (or **Pad → Go Out → Ref Finance HQ**). Pick 🚆 **Train**, then **Swap tokens**. | The Sim walks out the door, a train carries them across the map to Ref Finance HQ, and the result ("… swap tokens at Ref Finance HQ (+3 SB net)") lands in everyone's feed. |
+| 10 | **Pad → NEAR Wallet → Send**, pick the other player and send 10 SB. | A NEP-245 `mt_transfer` between the two accounts; both players see "sent 10 SB" in the feed. |
+| 11 | **Pad → Explorer** and **Pad → Names** (try `near`). | Live mainnet/testnet block height and gas price from NEAR RPC, and a live `.near` name lookup. |
 
 ## How the game works
 
@@ -54,11 +57,51 @@ Open the deployed URL, or run locally with `npm install && npm run dev` and open
   - 💰 Payday: shifts pay 1.5×.
   - 🥵 Heatwave: hygiene and energy drop faster.
 - **Clock.** 1 real second = 1 game minute, so a full day/night cycle takes 24 minutes.
+- **Going out.** 18 real NEAR / crypto ecosystem places are buildings on the map. Tap one (or Pad → Go Out), choose how to get there (🚗 car 3 SB · 5 s, 🚆 train 1 SB · 8 s, ✈️ plane 12 SB · 2 s), and pick an activity. The Sim leaves home, the vehicle crosses the map, and the activity changes needs and SimBucks when it finishes. Other players see who is travelling and who is at each place.
+
+  | Place | What you can do |
+  |---|---|
+  | NEAR Protocol HQ | Dev office hours (+social, +fun) · Hackathon sprint (earn 20–60 SB) |
+  | Ref Finance HQ | Swap tokens (pay 10, get 6–16) · Provide liquidity (lock 25, get 20–36) |
+  | Burrow Lending Office | Borrow 50 SB (owe 55) · Repay the loan |
+  | Rhea Finance Trading Floor | Trade with leverage (pay 15, get 0–36) · Supply & earn (lock 20, get 21–27) |
+  | Jumbo Exchange | Market-make (pay 8, get 6–14) |
+  | Aurora Labs | Deploy an EVM contract (earn 14–24) |
+  | Sputnik DAO Community Hall | Vote on proposals (+25 social, 2–6 SB) |
+  | OutLayer Agent Lab | Run an agent task (pay 6, earn 12–30) · VRF lucky draw (pay 5, get 0–15) |
+  | meme.cooking Launchpad | Launch a memecoin (pay 20, get 0–70) |
+  | NEAR Social Plaza | Post & hang out (+35 social, +10 fun) |
+  | Meteor Wallet Store | Grab merch (+20 fun) |
+  | HERE Wallet Kiosk | Liquid-stake (lock 10, get 10–14) |
+  | NEAR Intents Cross-chain Hub | Cross-chain swap (pay 10, get 8–15) |
+  | NEAR Explorer Data Center | Audit transactions (earn 10–18) |
+  | Electric Capital Office | Pitch your project (0–40 SB, usually 0) |
+  | NEAR Swimming Pool | Swim (+40 hygiene, +25 fun) |
+  | a16z crypto Outpost | Startup school (+social, +fun) |
+  | Dragonfly Research Lab | Research a thesis (earn 12–22) |
+
+  The map also has a railway loop with stations and a running train, and an airfield.
 - **Social.** "Call a neighbor" picks a Sim from another player's household (preferring people who are online). It boosts both Sims' Social, and the call shows in the feed.
 - **Leaders.** Households ranked by net worth (SimBucks + furniture).
 - **Top up (+).** Testnet faucet (+100 SB every 5 minutes) plus shortcuts to the ways of earning.
 
 The world advances lazily. Every `GET /api/state` (clients poll every 3 s) applies need decay, finishes actions and rotates events.
+
+## The NEAR Pad (in-game phone)
+
+The Pad has two sections.
+
+**NEARLIFE apps:** Market, Sell, Make, Jobs, Go Out, Bag, Neighbors, Leaders, Feed, About.
+
+**NEAR ecosystem apps** (each links to the real project; NEARLIFE is not affiliated with any of them):
+
+| App | What it shows |
+|---|---|
+| **NEAR Wallet** | Your Privy-embedded NEAR account. SimBucks (NEP-245) and native NEAR balance (live RPC). **Send** SimBucks to another player (`mt_transfer`), **Receive** (your account id + faucet), **History** (your NEP-245 event log). |
+| **OutLayer** | What OutLayer is (FastNEAR's TEE-attested off-chain compute), your agent jobs run, net SimBucks earned, jobs running now, and a button to send your Sim to the OutLayer Agent Lab. |
+| **Names** | Live `.near` name lookup on NEAR mainnet (taken / available, balance, NearBlocks link). |
+| **Explorer** | Live block height, block time and gas price for mainnet and testnet from NEAR RPC, refreshed every 5 s, plus your account on NearBlocks. |
+| **Ref, Burrow, Rhea, Jumbo, Social, Sputnik, Meteor, HERE, Intents, Aurora, meme.cooking** | Status card: what the project is, what you can do at its building in town, who is there now, your past visits, a "Go to …" button (car / train / plane), and a link to the real app. |
 
 ## NEAR features used
 
@@ -73,7 +116,8 @@ The world advances lazily. Every `GET /api/state` (clients poll every 3 s) appli
 - **Off-chain by default.** Without the settlement variables, the NEP-245 ledger runs on the game server (Redis or memory) with NEP-245 semantics and event format.
 - **Settlement not tested on a live contract.** On-chain settlement needs a deployed NEP-245 contract that supports operator approvals and owner mint/burn. This repository does not deploy one, and that path has not been run against a live contract.
 - **Implicit accounts are unfunded.** They show "not funded" in the explorer until someone sends them NEAR.
-- **Not included:** NEAR Intents (cross-chain payment).
+- **Ecosystem places and apps are simulated.** Swaps, loans, memecoins and agent jobs at the in-game buildings move SimBucks inside the game. They don't call Ref, Burrow, Rhea, OutLayer, NEAR Intents or any other real protocol. Real data comes only from NEAR RPC (balances, names, blocks, gas). Names and links are fan tributes, not endorsements.
+- **Not included:** real cross-chain payments via NEAR Intents.
 - **Trading needs other players.** Every trade is between real players, so a solo player can earn (shifts, faucet) and build, but needs neighbors to buy what they make.
 
 ## Tech stack
@@ -102,21 +146,26 @@ app/
   api/listing               POST create listing  ·  DELETE ?id= cancel
   api/buy                   POST buy one unit of a listing
   api/topup                 POST testnet SimBucks faucet
+  api/place                 POST send a Sim to a city place (car / train / plane) to do an activity
+  api/send                  POST NEAR Wallet send: SimBucks to another household (mt_transfer)
+  api/near/network          GET  live block height / gas price (mainnet or testnet)
   api/activity              GET  public activity feed
   api/nep245                GET  NEP-245 views + event log
-  api/near/balance          GET  native NEAR balance via RPC
+  api/near/balance          GET  native NEAR balance via RPC (?network=mainnet for .near names)
 components/game/
   Game.tsx                  Views (home / build / city / visit), status strip, dock, Sim card, sheets
   three/Room.tsx            Isometric home: floor, walls with LED strips, furniture, Sims, placement outline
-  three/City.tsx            Neighborhood: player homes, open plots, night market, work hub, plaza, trade screen
+  three/City.tsx            Neighborhood: player homes, 18 ecosystem buildings, railway + train, airfield, trip vehicles
+  ui/PlaceSheet.tsx         Place detail: travel mode, activities, who's there, link to the real project
   three/Character3D.tsx     Jointed human Sim with walk / sit / lie poses and mood halo
   three/FurnitureModel.tsx  Furniture models
   three/anchors.tsx         Screen-space labels that follow 3D objects
-  ui/Phone.tsx              NEAR Pad: Jobs, Market, Sell, Make, Bag, Neighbors, Leaders, Feed, Wallet, About
+  ui/Phone.tsx              NEAR Pad: game apps + NEAR ecosystem apps (Wallet, OutLayer, Names, Explorer, …)
   ui/Hud.tsx, Catalogue.tsx, NeedsSheet.tsx, TopUpSheet.tsx, FurnitureMenu.tsx, CreateHousehold.tsx, Welcome.tsx, Portrait.tsx
 lib/
   catalog.ts                Items (incl. furniture), actions, decay, neighborhood events, game clock
   layout.ts                 Room grid placement rules, starter layout, room palettes
+  places.ts                 The 18 ecosystem places, their activities, and car / train / plane travel
   engine.ts                 Needs, actions, furniture, market, events, world advance, snapshots
   nep245.ts                 NEP-245 multi-token ledger + events
   near.ts                   NEAR RPC + optional on-chain settlement

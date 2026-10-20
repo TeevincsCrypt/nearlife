@@ -3,24 +3,60 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, ITEMS, NEED_META, WORLD_EVENTS, gameClock } from "@/lib/catalog";
 import { placedCount } from "@/lib/layout";
+import { PLACES, PLACE_BY_ID } from "@/lib/places";
 import type { Character, HouseholdView, NeedKey, StateSnapshot } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn, shortAccount, timeAgo } from "@/lib/utils";
 
-export type AppId = "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "leaders" | "about";
+export type EcoId =
+  | "names"
+  | "ref"
+  | "burrow"
+  | "rhea"
+  | "jumbo"
+  | "nsocial"
+  | "sputnik"
+  | "outlayer"
+  | "meteor"
+  | "here"
+  | "explorer"
+  | "intents"
+  | "aurora"
+  | "meme";
+export type AppId = "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "leaders" | "places" | "about" | EcoId;
 
 const APPS: Array<{ id: AppId; label: string; emoji: string; color: string }> = [
-  { id: "jobs", label: "Jobs", emoji: "💼", color: "#00ec97" },
   { id: "market", label: "Market", emoji: "🛒", color: "#fbbf24" },
   { id: "sell", label: "Sell", emoji: "🏷️", color: "#f472b6" },
   { id: "make", label: "Make", emoji: "🍳", color: "#fb923c" },
+  { id: "jobs", label: "Jobs", emoji: "💼", color: "#00ec97" },
+  { id: "places", label: "Go Out", emoji: "🗺️", color: "#38bdf8" },
   { id: "bag", label: "Bag", emoji: "🎒", color: "#facc15" },
   { id: "neighbors", label: "Neighbors", emoji: "🏘️", color: "#22d3ee" },
   { id: "leaders", label: "Leaders", emoji: "🏆", color: "#a78bfa" },
   { id: "feed", label: "Feed", emoji: "📡", color: "#60a5fa" },
-  { id: "wallet", label: "Wallet", emoji: "◈", color: "#00ec97" },
   { id: "about", label: "About", emoji: "ℹ️", color: "#94a3b8" },
 ];
+
+/** NEAR ecosystem apps on the Pad. `place` links the app to its building in town. */
+const ECO: Record<EcoId | "wallet", { label: string; name: string; emoji: string; color: string; url: string; place?: string; blurb: string }> = {
+  wallet: { label: "NEAR Wallet", name: "NEAR Wallet", emoji: "Ⓝ", color: "#00ec97", url: "https://nearblocks.io", place: "near_hq", blurb: "Your Privy-embedded NEAR account: balances, send, receive, history." },
+  outlayer: { label: "OutLayer", name: "OutLayer", emoji: "🤖", color: "#60a5fa", url: "https://outlayer.fastnear.com", place: "outlayer", blurb: "FastNEAR's verifiable off-chain compute: code runs in Intel TDX enclaves and returns attested results. Your Sims run agent jobs at the OutLayer Agent Lab." },
+  names: { label: "Names", name: "NEAR Name Service", emoji: "🔤", color: "#a3e635", url: "https://nearblocks.io", blurb: "Human-readable .near accounts. Look up any name live on NEAR mainnet." },
+  explorer: { label: "Explorer", name: "NEAR Explorer", emoji: "🔎", color: "#94a3b8", url: "https://nearblocks.io", place: "explorer", blurb: "Live chain data from NEAR RPC, plus your account on NearBlocks." },
+  ref: { label: "Ref", name: "Ref Finance", emoji: "🔄", color: "#22d3ee", url: "https://app.ref.finance", place: "ref", blurb: "NEAR's original AMM DEX, now part of Rhea Finance. Swap and provide liquidity at Ref Finance HQ." },
+  burrow: { label: "Burrow", name: "Burrow", emoji: "🏦", color: "#fbbf24", url: "https://app.burrow.finance", place: "burrow", blurb: "Lending and borrowing, now part of Rhea Finance. Take one SimBucks loan at a time at the Burrow office." },
+  rhea: { label: "Rhea", name: "Rhea Finance", emoji: "📈", color: "#f472b6", url: "https://app.rhea.finance", place: "rhea", blurb: "Ref + Burrow merged into Rhea: chain-abstracted trading and lending." },
+  jumbo: { label: "Jumbo", name: "Jumbo Exchange", emoji: "🐘", color: "#a3e635", url: "https://jumbo.exchange", place: "jumbo", blurb: "Community DEX on NEAR. Market-make for a small, steady edge." },
+  nsocial: { label: "Social", name: "NEAR Social", emoji: "💬", color: "#38bdf8", url: "https://near.social", place: "social", blurb: "On-chain social on NEAR. Post and hang out at the NEAR Social Plaza." },
+  sputnik: { label: "Sputnik", name: "Sputnik DAO", emoji: "🏛️", color: "#c4b5fd", url: "https://nearblocks.io/address/sputnik-dao.near", place: "sputnik", blurb: "The DAO factory behind most NEAR DAOs (sputnik-dao.near). Vote at the community hall." },
+  meteor: { label: "Meteor", name: "Meteor Wallet", emoji: "☄️", color: "#e879f9", url: "https://wallet.meteorwallet.app", place: "meteor", blurb: "Popular NEAR browser and mobile wallet." },
+  here: { label: "HERE", name: "HERE Wallet", emoji: "📲", color: "#facc15", url: "https://www.herewallet.app", place: "here", blurb: "Mobile NEAR wallet with liquid staking." },
+  intents: { label: "Intents", name: "NEAR Intents", emoji: "🌐", color: "#34d399", url: "https://near-intents.org", place: "intents", blurb: "Say what you want; solvers route it across chains." },
+  aurora: { label: "Aurora", name: "Aurora", emoji: "🌈", color: "#86efac", url: "https://aurora.dev", place: "aurora", blurb: "The EVM on NEAR. Ship Solidity contracts at Aurora Labs." },
+  meme: { label: "meme.cooking", name: "meme.cooking", emoji: "🍳", color: "#fb923c", url: "https://meme.cooking", place: "meme", blurb: "Fair-launch memecoin launchpad on NEAR. High risk, high fun." },
+};
+const ECO_ORDER: Array<EcoId | "wallet"> = ["wallet", "outlayer", "names", "explorer", "ref", "burrow", "rhea", "jumbo", "nsocial", "sputnik", "meteor", "here", "intents", "aurora", "meme"];
 
 type Act = <T = unknown>(path: string, body?: unknown, method?: "POST" | "DELETE") => Promise<T | null>;
 
@@ -36,6 +72,7 @@ interface Props {
   onVisit: (id: string) => void;
   onClose: () => void;
   onSignOut: () => void;
+  onPlace: (placeId: string) => void;
 }
 
 function Row({ children, className }: { children: ReactNode; className?: string }) {
@@ -380,21 +417,55 @@ function LeadersApp({ snapshot, me }: Props) {
   );
 }
 
-function WalletApp({ me, now, act, toast }: Props) {
+function EcoHeader({ id }: { id: EcoId | "wallet" }) {
+  const e = ECO[id];
+  return (
+    <div className="mb-2 flex items-center gap-3 rounded-2xl border p-3" style={{ borderColor: `${e.color}55`, background: `${e.color}12` }}>
+      <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl" style={{ background: `${e.color}25`, color: e.color }}>
+        {e.emoji}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="font-bold text-white">{e.name}</div>
+        <div className="text-xs leading-snug text-slate-300">{e.blurb}</div>
+      </div>
+    </div>
+  );
+}
+
+function LinkRow({ url, label }: { url: string; label?: string }) {
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm">
+      <span className="text-slate-200">{label ?? "Open the real app"}</span>
+      <span className="font-mono text-xs text-[#00ec97]">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</span>
+    </a>
+  );
+}
+
+/** Activity entries for my household at a given place. */
+function myVisits(snapshot: StateSnapshot, me: HouseholdView | null, placeName?: string) {
+  if (!me || !placeName) return [];
+  return snapshot.activity.filter((a) => a.householdId === me.id && a.text.includes(` at ${placeName}`));
+}
+
+function WalletApp({ snapshot, me, now, act, toast }: Props) {
+  const [tab, setTab] = useState<"send" | "receive" | "history">("history");
+  const [to, setTo] = useState("");
+  const [amount, setAmount] = useState(10);
   const [events, setEvents] = useState<Array<{ seq: number; ts: number; log: string; event: { event: string } }>>([]);
   const [near, setNear] = useState<{ near?: string; exists?: boolean; error?: string; explorer?: string } | null>(null);
   useEffect(() => {
     if (!me) return;
-    fetch("/api/nep245?method=events&limit=100")
+    fetch("/api/nep245?method=events&limit=150")
       .then((r) => r.json())
-      .then((d) => setEvents((d.events ?? []).filter((e: { log: string }) => e.log.includes(me.accountId)).slice(0, 12)))
+      .then((d) => setEvents((d.events ?? []).filter((e: { log: string }) => e.log.includes(me.accountId)).slice(0, 15)))
       .catch(() => {});
     fetch(`/api/near/balance?account_id=${me.accountId}`)
       .then((r) => r.json())
       .then(setNear)
       .catch(() => {});
-  }, [me?.accountId]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!me) return null;
+  }, [me?.accountId, me?.balance]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!me) return <Row>Move in first.</Row>;
+  const neighbors = snapshot.households.filter((h) => h.id !== me.id);
   const cooldown = Math.max(0, (me.lastTopup ?? 0) + 5 * 60_000 - now);
   return (
     <div className="space-y-2">
@@ -404,42 +475,321 @@ function WalletApp({ me, now, act, toast }: Props) {
           {me.balance.toLocaleString()} <span className="text-base text-slate-400">{CURRENCY_SYMBOL}</span>
         </div>
         <div className="text-[11px] break-all text-slate-400">
-          {me.accountSource === "privy" ? "Privy embedded NEAR wallet" : "NEAR implicit account"} {shortAccount(me.accountId)} ·{" "}
+          {me.accountSource === "privy" ? "Privy embedded NEAR wallet" : "NEAR implicit account"} {shortAccount(me.accountId)}
+        </div>
+        <div className="text-[11px] text-slate-400">
+          Native NEAR:{" "}
           {near?.explorer ? (
             <a href={near.explorer} target="_blank" rel="noreferrer" className="text-[#00ec97] underline">
-              {near.error ? "explorer" : near.exists ? `${near.near} NEAR` : "not funded yet"} ↗
+              {near.error ? "RPC unavailable" : near.exists ? `${near.near} NEAR` : "0 (not funded yet)"} ↗
             </a>
           ) : (
             "…"
           )}
+          {(me.debt ?? 0) > 0 && <span className="ml-2 text-amber-300">· Burrow loan {me.debt} SB</span>}
         </div>
-        <Btn
-          disabled={cooldown > 0}
-          onClick={async () => {
-            const r = await act<{ amount: number }>("/api/topup");
-            if (r) toast(`+${r.amount} ${CURRENCY_SYMBOL} from the testnet faucet`, "success");
-          }}
-        >
-          {cooldown > 0 ? `Faucet in ${Math.ceil(cooldown / 60000)}m` : `+100 ${CURRENCY_SYMBOL} testnet faucet`}
-        </Btn>
       </Row>
-      <div className="px-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">TOKENS</div>
-      <Row className="flex-wrap gap-2">
-        {Object.entries({ [CURRENCY]: me.balance, ...me.inventory }).map(([id, q]) => (
-          <span key={id} className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-xs">
-            {ITEMS[id]?.emoji} {id} · {q}
-          </span>
+      <div className="grid grid-cols-3 gap-1.5">
+        {(["send", "receive", "history"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn("cursor-pointer rounded-xl py-2 text-sm font-bold capitalize", tab === t ? "bg-white text-slate-900" : "bg-white/10 text-slate-300")}
+          >
+            {t === "send" ? "↗ Send" : t === "receive" ? "↙ Receive" : "History"}
+          </button>
         ))}
-      </Row>
-      <div className="px-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">NEP-245 EVENTS</div>
-      {events.map((e) => (
-        <Row key={e.seq} className="flex-col items-start gap-1">
-          <div className="font-mono text-xs font-bold text-[#00ec97]">
-            {e.event.event} · {timeAgo(e.ts, now)}
+      </div>
+      {tab === "send" && (
+        <Row className="flex-col items-stretch">
+          {neighbors.length === 0 ? (
+            <div className="text-sm text-slate-400">No neighbors yet. Invite a friend to move in.</div>
+          ) : (
+            <>
+              <select value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-white/10 bg-[#0b0d1a] px-3 py-2 text-sm text-white">
+                <option value="">Choose a neighbor…</option>
+                {neighbors.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name} · {shortAccount(h.accountId)}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={amount}
+                  onChange={(e) => setAmount(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono text-white"
+                />
+                <span className="text-sm text-slate-400">{CURRENCY_SYMBOL}</span>
+                <Btn
+                  disabled={!to || amount > me.balance}
+                  onClick={async () => {
+                    const ok = await act("/api/send", { toHouseholdId: to, amount });
+                    if (ok) toast(`Sent ${amount} ${CURRENCY_SYMBOL} (NEP-245 mt_transfer)`, "success");
+                  }}
+                >
+                  Send
+                </Btn>
+              </div>
+            </>
+          )}
+        </Row>
+      )}
+      {tab === "receive" && (
+        <Row className="flex-col items-start">
+          <div className="text-xs text-slate-400">Your account</div>
+          <code className="w-full font-mono text-[11px] break-all text-[#00ec97]">{me.accountId}</code>
+          <div className="flex gap-2">
+            <Btn tone="ghost" onClick={() => navigator.clipboard?.writeText(me.accountId).then(() => toast("Copied", "success"))}>
+              Copy
+            </Btn>
+            <Btn
+              disabled={cooldown > 0}
+              onClick={async () => {
+                const r = await act<{ amount: number }>("/api/topup");
+                if (r) toast(`+${r.amount} ${CURRENCY_SYMBOL} from the testnet faucet`, "success");
+              }}
+            >
+              {cooldown > 0 ? `Faucet ${Math.ceil(cooldown / 60000)}m` : `Faucet +100`}
+            </Btn>
           </div>
-          <code className="block w-full overflow-hidden text-[10px] break-all text-slate-500">{e.log.slice(0, 220)}</code>
+          <div className="text-[11px] text-slate-500">Neighbors can send to “{me.name}” from their NEAR Wallet app.</div>
+        </Row>
+      )}
+      {tab === "history" && (
+        <>
+          <Row className="flex-wrap gap-2">
+            {Object.entries({ [CURRENCY]: me.balance, ...me.inventory }).map(([id, q]) => (
+              <span key={id} className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-xs">
+                {ITEMS[id]?.emoji} {id} · {q}
+              </span>
+            ))}
+          </Row>
+          {events.map((e) => (
+            <Row key={e.seq} className="flex-col items-start gap-1">
+              <div className="font-mono text-xs font-bold text-[#00ec97]">
+                {e.event.event} · {timeAgo(e.ts, now)}
+              </div>
+              <code className="block w-full overflow-hidden text-[10px] break-all text-slate-500">{e.log.slice(0, 220)}</code>
+            </Row>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function NamesApp() {
+  const [name, setName] = useState("");
+  const [res, setRes] = useState<{ accountId: string; exists?: boolean; near?: string; error?: string; explorer?: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const lookup = async () => {
+    const n = name.trim().toLowerCase().replace(/\.near$/, "");
+    if (!n) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/near/balance?network=mainnet&account_id=${encodeURIComponent(`${n}.near`)}`);
+      setRes(await r.json());
+    } catch {
+      setRes({ accountId: `${n}.near`, error: "lookup failed" });
+    }
+    setLoading(false);
+  };
+  return (
+    <div className="space-y-2">
+      <EcoHeader id="names" />
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void lookup();
+        }}
+      >
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="alice"
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono text-white placeholder:text-slate-600"
+        />
+        <span className="self-center font-mono text-sm text-slate-400">.near</span>
+        <Btn disabled={loading}>{loading ? "…" : "Look up"}</Btn>
+      </form>
+      {res && (
+        <Row className="flex-col items-start">
+          <div className="font-mono text-sm font-bold text-white">{res.accountId}</div>
+          {res.error ? (
+            <div className="text-sm text-amber-300">{res.error === "invalid account id" ? "Not a valid NEAR name" : "NEAR RPC unavailable right now"}</div>
+          ) : res.exists ? (
+            <div className="text-sm text-slate-300">
+              Taken · holds <span className="text-[#00ec97]">{res.near} NEAR</span> on mainnet
+            </div>
+          ) : (
+            <div className="text-sm text-[#00ec97]">Available. Nobody owns this name on mainnet yet.</div>
+          )}
+          {res.explorer && <LinkRow url={res.explorer} label="View on NearBlocks" />}
+        </Row>
+      )}
+    </div>
+  );
+}
+
+function ExplorerApp({ snapshot, me, onPlace }: Props) {
+  const [nets, setNets] = useState<Record<string, { blockHeight?: number; gasPrice?: string; chainId?: string; blockTime?: string; error?: string }>>({});
+  useEffect(() => {
+    const load = () =>
+      (["mainnet", "testnet"] as const).forEach((n) =>
+        fetch(`/api/near/network?network=${n}`)
+          .then((r) => r.json())
+          .then((d) => setNets((o) => ({ ...o, [n]: d })))
+          .catch(() => setNets((o) => ({ ...o, [n]: { error: "unavailable" } }))),
+      );
+    load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="space-y-2">
+      <EcoHeader id="explorer" />
+      {(["mainnet", "testnet"] as const).map((n) => {
+        const d = nets[n];
+        return (
+          <Row key={n} className="flex-col items-start gap-0.5">
+            <div className="font-mono text-[10px] font-bold tracking-widest text-slate-500">{n.toUpperCase()} · LIVE FROM RPC</div>
+            {!d ? (
+              <div className="text-sm text-slate-400">Loading…</div>
+            ) : d.error ? (
+              <div className="text-sm text-amber-300">RPC unavailable</div>
+            ) : (
+              <>
+                <div className="font-mono text-2xl font-black text-white">#{d.blockHeight?.toLocaleString()}</div>
+                <div className="text-xs text-slate-400">
+                  gas price {d.gasPrice} yocto · {d.blockTime ? new Date(d.blockTime).toLocaleTimeString() : ""}
+                </div>
+              </>
+            )}
+          </Row>
+        );
+      })}
+      {me && <LinkRow url={`https://${snapshot.config.network === "mainnet" ? "" : "testnet."}nearblocks.io/address/${me.accountId}`} label="Your account on NearBlocks" />}
+      <Btn tone="ghost" onClick={() => onPlace("explorer")}>
+        🔎 Go to the Explorer Data Center
+      </Btn>
+    </div>
+  );
+}
+
+function OutLayerApp(props: Props) {
+  const { snapshot, me, character, now, onPlace } = props;
+  const visits = myVisits(snapshot, me, "OutLayer Agent Lab");
+  const earned = visits.reduce((s, a) => {
+    const m = a.text.match(/\(([+-]\d+) SB net\)/);
+    return s + (m ? Number(m[1]) : 0);
+  }, 0);
+  const running = me?.characters.filter((c) => c.busy?.place === "outlayer" && c.busy.until > now) ?? [];
+  return (
+    <div className="space-y-2">
+      <EcoHeader id="outlayer" />
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          ["Jobs run", String(visits.length)],
+          ["Net SB", `${earned >= 0 ? "+" : ""}${earned}`],
+          ["Running", String(running.length)],
+        ].map(([k, v]) => (
+          <Row key={k} className="flex-col items-start gap-0">
+            <span className="font-mono text-[10px] text-slate-500">{k}</span>
+            <span className="font-mono text-xl font-black text-white">{v}</span>
+          </Row>
+        ))}
+      </div>
+      {running.map((c) => (
+        <Row key={c.id} className="text-sm">
+          🧠 {c.name} is running an agent job… {Math.ceil((c.busy!.until - now) / 1000)}s
         </Row>
       ))}
+      <Row className="flex-col items-start text-xs text-slate-300">
+        <div className="font-bold text-white">How it maps to the real thing</div>
+        <div>
+          On real OutLayer, a NEAR contract or HTTPS call sends a WASM job to an Intel TDX enclave, which returns the result plus a hardware attestation (code hash, input hash,
+          output). Here, your Sim pays a job fee in SimBucks and earns a payout when the job finishes. The VRF lucky draw stands in for OutLayer&apos;s verifiable randomness.
+        </div>
+      </Row>
+      <button
+        disabled={!character}
+        onClick={() => onPlace("outlayer")}
+        className="btn-neon w-full cursor-pointer rounded-2xl py-3 font-bold disabled:opacity-40"
+      >
+        🤖 Send {character?.name ?? "a Sim"} to run an agent job
+      </button>
+      <LinkRow url="https://outlayer.fastnear.com/docs" label="OutLayer docs" />
+      {visits.slice(0, 6).map((a) => (
+        <Row key={a.id} className="text-xs">
+          {a.text}
+        </Row>
+      ))}
+    </div>
+  );
+}
+
+function makeEcoApp(id: EcoId) {
+  return function EcoApp({ snapshot, me, now, onPlace }: Props) {
+    const e = ECO[id];
+    const place = e.place ? PLACE_BY_ID[e.place] : undefined;
+    const here = place
+      ? snapshot.households.flatMap((h) => h.characters.filter((c) => c.busy?.place === place.id && c.busy.until > now).map((c) => `${c.name} (${h.name})`))
+      : [];
+    const visits = myVisits(snapshot, me, place?.name);
+    return (
+      <div className="space-y-2">
+        <EcoHeader id={id} />
+        {place && (
+          <>
+            <Row className="flex-col items-start">
+              <div className="font-mono text-[10px] font-bold tracking-widest text-slate-500">IN TOWN · {place.name.toUpperCase()}</div>
+              {place.actions.map((a) => (
+                <div key={a.id} className="text-sm text-slate-200">
+                  {a.emoji} {a.label} <span className="text-xs text-slate-400">· {a.help}</span>
+                </div>
+              ))}
+              <div className="text-xs text-slate-400">{here.length ? `Here now: ${here.join(", ")}` : "Nobody there right now."}</div>
+            </Row>
+            <button onClick={() => onPlace(place.id)} className="btn-neon w-full cursor-pointer rounded-2xl py-3 font-bold">
+              Go to {place.short} 🚗 🚆 ✈️
+            </button>
+          </>
+        )}
+        <LinkRow url={e.url} />
+        {visits.length > 0 && <div className="px-1 pt-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">YOUR VISITS</div>}
+        {visits.slice(0, 5).map((a) => (
+          <Row key={a.id} className="text-xs">
+            {a.text}
+          </Row>
+        ))}
+      </div>
+    );
+  };
+}
+
+function PlacesApp({ now, snapshot, onPlace }: Props) {
+  return (
+    <div className="space-y-2">
+      <p className="px-1 text-xs text-slate-400">Pick a place, then choose car, train or plane. Your Sim leaves home and comes back when done.</p>
+      {PLACES.map((p) => {
+        const here = snapshot.households.reduce((n, h) => n + h.characters.filter((c) => c.busy?.place === p.id && c.busy.until > now).length, 0);
+        return (
+          <button key={p.id} onClick={() => onPlace(p.id)} className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.05] p-3 text-left">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ background: `${p.color}22`, color: p.color }}>
+              {p.emoji}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-bold text-white">{p.name}</span>
+              <span className="block truncate text-xs text-slate-400">{p.actions.map((a) => a.label).join(" · ")}</span>
+            </span>
+            {here > 0 && <span className="rounded-lg bg-[#00ec97]/15 px-2 py-0.5 text-xs font-bold text-[#00ec97]">{here} here</span>}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -456,6 +806,7 @@ function AboutApp({ snapshot, onSignOut }: Props) {
           <li>🏷️ Sell → list them for other players to buy.</li>
           <li>🛠 Build → furnish your home to unlock more ways to earn.</li>
           <li>🌆 City → visit neighbors and see what everyone is up to.</li>
+          <li>🗺️ Go Out → take a car, train or plane to Ref Finance, Burrow, OutLayer, meme.cooking and more.</li>
         </ol>
       </Row>
       <Row className="flex-col items-start">
@@ -464,7 +815,9 @@ function AboutApp({ snapshot, onSignOut }: Props) {
           <li>Social login (Privy). A NEAR account is created for you, with no wallet popups.</li>
           <li>SimBucks, food, services and furniture are NEP-245 multi-tokens.</li>
           <li>Every trade is a pair of NEP-245 transfers between real players.</li>
+          <li>The NEAR ecosystem apps link to the real projects, and Explorer and Names read live NEAR RPC data.</li>
         </ul>
+        <div className="text-[11px] text-slate-500">Places and apps named after real projects are fan tributes. NEARLIFE is not affiliated with or endorsed by them.</div>
         <div className="font-mono text-[10px] text-slate-500">
           auth {snapshot.config.auth} · state {snapshot.config.storage} · nep245 {snapshot.config.settlement} · {snapshot.config.network}
         </div>
@@ -486,14 +839,44 @@ const SCREENS: Record<AppId, (p: Props) => ReactNode> = {
   make: MakeApp,
   wallet: WalletApp,
   leaders: LeadersApp,
+  places: PlacesApp,
   about: AboutApp,
+  names: NamesApp,
+  explorer: ExplorerApp,
+  outlayer: OutLayerApp,
+  ref: makeEcoApp("ref"),
+  burrow: makeEcoApp("burrow"),
+  rhea: makeEcoApp("rhea"),
+  jumbo: makeEcoApp("jumbo"),
+  nsocial: makeEcoApp("nsocial"),
+  sputnik: makeEcoApp("sputnik"),
+  meteor: makeEcoApp("meteor"),
+  here: makeEcoApp("here"),
+  intents: makeEcoApp("intents"),
+  aurora: makeEcoApp("aurora"),
+  meme: makeEcoApp("meme"),
 };
+
+function AppIcon({ emoji, label, color, onClick, featured }: { emoji: string; label: string; color: string; onClick: () => void; featured?: boolean }) {
+  return (
+    <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-1 active:scale-90">
+      <span
+        className="relative flex size-12 items-center justify-center rounded-2xl border bg-white/[0.04] text-xl font-black"
+        style={{ borderColor: `${color}66`, boxShadow: `0 0 14px ${color}33, inset 0 0 10px ${color}1a`, color }}
+      >
+        {emoji}
+        {featured && <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-[#00ec97] shadow-[0_0_6px_#00ec97]" />}
+      </span>
+      <span className="w-full truncate text-center text-[10px] font-medium text-slate-300">{label}</span>
+    </button>
+  );
+}
 
 /** The NEAR Pad: a dark handheld with the game's apps. */
 export function Phone(props: Props) {
   const { app, setApp, now, onClose, character, me, act, toast } = props;
   const clock = gameClock(now);
-  const meta = APPS.find((a) => a.id === app);
+  const meta = APPS.find((a) => a.id === app) ?? (app !== "home" && app in ECO ? ECO[app as EcoId | "wallet"] : undefined);
   const Screen = app !== "home" ? SCREENS[app] : null;
 
   return (
@@ -522,29 +905,34 @@ export function Phone(props: Props) {
           </div>
 
           {app === "home" ? (
-            <div className="relative flex flex-1 flex-col px-4 pb-4">
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-4">
               {me && (
-                <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-                  <div className="text-xs text-slate-400">{me.name}</div>
+                <button
+                  onClick={() => setApp("wallet")}
+                  className="mb-4 cursor-pointer rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>{me.name}</span>
+                    <span className="font-mono text-[#00ec97]">Ⓝ {shortAccount(me.accountId)}</span>
+                  </div>
                   <div className="font-mono text-2xl font-black text-white">
                     {me.balance.toLocaleString()} <span className="text-sm text-[#00ec97]">{CURRENCY_SYMBOL}</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
                     {props.snapshot.listings.filter((l) => l.sellerHouseholdId === me.id).length} live listings · {props.snapshot.households.length} households in town
                   </div>
-                </div>
+                </button>
               )}
-              <div className="grid grid-cols-4 gap-x-2 gap-y-4">
+              <div className="mb-2 font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">NEARLIFE</div>
+              <div className="grid grid-cols-5 gap-x-1.5 gap-y-3">
                 {APPS.map((a) => (
-                  <button key={a.id} onClick={() => setApp(a.id)} className="flex cursor-pointer flex-col items-center gap-1.5 active:scale-90">
-                    <span
-                      className="flex size-14 items-center justify-center rounded-2xl border bg-white/[0.04] text-2xl"
-                      style={{ borderColor: `${a.color}66`, boxShadow: `0 0 16px ${a.color}33, inset 0 0 12px ${a.color}1a`, color: a.color }}
-                    >
-                      {a.emoji}
-                    </span>
-                    <span className="text-[11px] font-medium text-slate-300">{a.label}</span>
-                  </button>
+                  <AppIcon key={a.id} emoji={a.emoji} label={a.label} color={a.color} onClick={() => setApp(a.id)} />
+                ))}
+              </div>
+              <div className="mt-5 mb-2 font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">NEAR ECOSYSTEM</div>
+              <div className="grid grid-cols-5 gap-x-1.5 gap-y-3">
+                {ECO_ORDER.map((id) => (
+                  <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={id === "wallet" || id === "outlayer"} />
                 ))}
               </div>
               <button
@@ -553,7 +941,7 @@ export function Phone(props: Props) {
                   const ok = await act("/api/action", { characterId: character.id, action: "socialize" });
                   if (ok) toast(`📞 ${character.name} is calling a neighbor`, "success");
                 }}
-                className="mt-auto flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#00ec97]/40 bg-[#00ec97]/10 py-3 font-semibold text-[#00ec97]"
+                className="mt-5 flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#00ec97]/40 bg-[#00ec97]/10 py-3 font-semibold text-[#00ec97]"
               >
                 📞 Call a neighbor {character ? `as ${character.name}` : ""}
               </button>

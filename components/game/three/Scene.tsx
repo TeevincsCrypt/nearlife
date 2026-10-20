@@ -60,7 +60,7 @@ function CameraRig({ kind, portrait }: { kind: "room" | "city"; portrait: boolea
   const { camera } = useThree();
   useEffect(() => {
     // Pull back further on tall phone screens so the whole room / more of the map fits.
-    const dist = kind === "room" ? (portrait ? 24 : 17) : portrait ? 64 : 48;
+    const dist = kind === "room" ? (portrait ? 24 : 17) : portrait ? 80 : 60;
     const dir = kind === "room" ? [1, 1.05, 1] : [0.55, 1, 0.75];
     const len = Math.hypot(dir[0], dir[1], dir[2]);
     const t = targetFor(kind, portrait);
@@ -117,7 +117,7 @@ export function Scene({
           target={target}
           screenSpacePanning={false}
           minDistance={12}
-          maxDistance={95}
+          maxDistance={130}
           minPolarAngle={0.35}
           maxPolarAngle={1.05}
           mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }}

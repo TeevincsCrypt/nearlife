@@ -10,7 +10,9 @@ import type { PlacedFurniture } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Projector } from "./three/anchors";
-import { City, type Landmark } from "./three/City";
+import { PLACE_BY_ID } from "@/lib/places";
+import { City, housePosition, type Landmark, type Trip } from "./three/City";
+import { PlaceSheet } from "./ui/PlaceSheet";
 import { Room, charMood, moodColor, type Placement } from "./three/Room";
 import { Scene } from "./three/Scene";
 import { Catalogue } from "./ui/Catalogue";
@@ -38,7 +40,7 @@ function useNow(serverNow?: number) {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
-  return now + offset;
+  return [now + offset, offset] as const;
 }
 
 function DockButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: string; label: string }) {
@@ -60,7 +62,7 @@ export default function Game() {
   const auth = useAuth();
   const toast = useToast();
   const { snapshot, myHousehold, act } = useGame();
-  const now = useNow(snapshot?.now);
+  const [now, clockOffset] = useNow(snapshot?.now);
 
   const [view, setView] = useState<View>("home");
   const [buyMode, setBuyMode] = useState(false);
@@ -73,6 +75,7 @@ export default function Game() {
   const [phone, setPhone] = useState<AppId | "home" | null>(null);
   const [sheet, setSheet] = useState<"needs" | "topup" | null>(null);
   const [walkTo, setWalkTo] = useState<[number, number] | null>(null);
+  const [placeId, setPlaceId] = useState<string | null>(null);
 
   const me = myHousehold;
   const effectiveView: View = !me && view === "home" ? "map" : view;
@@ -82,6 +85,32 @@ export default function Game() {
   const ev = WORLD_EVENTS.find((e) => e.id === snapshot?.worldEvent?.id) ?? WORLD_EVENTS[0];
   const clock = gameClock(now);
   const latestTrade = useMemo(() => snapshot?.activity.find((a) => a.type === "purchase"), [snapshot?.activity]);
+  // Every Sim currently travelling to / at a city place, from any household (shared world).
+  const trips = useMemo(() => {
+    if (!snapshot) return [] as Array<Trip & { label: string }>;
+    const out: Array<Trip & { label: string }> = [];
+    for (const h of snapshot.households) {
+      const from = housePosition(snapshot.households, h.id);
+      if (!from) continue;
+      for (const c of h.characters) {
+        const b = c.busy;
+        const place = b?.place ? PLACE_BY_ID[b.place] : undefined;
+        if (!b || !place || b.until <= snapshot.now) continue;
+        out.push({
+          id: c.id,
+          mode: b.travel ?? "car",
+          from,
+          to: place.pos,
+          start: b.startedAt,
+          arrive: b.arriveAt ?? b.startedAt,
+          until: b.until,
+          color: h.color,
+          label: `${c.name} → ${place.short}`,
+        });
+      }
+    }
+    return out;
+  }, [snapshot]);
 
   useEffect(() => {
     if (!walkTo) return;
@@ -96,6 +125,7 @@ export default function Game() {
     setSelFurn(null);
     setMenuFurn(null);
     setSheet(null);
+    setPlaceId(null);
   }
 
   function visit(id: string) {
@@ -200,7 +230,7 @@ export default function Game() {
               }}
             />
           ) : (
-            <City households={snapshot.households} myHouseholdId={me?.id} latestTrade={latestTrade} />
+            <City households={snapshot.households} myHouseholdId={me?.id} latestTrade={latestTrade} trips={trips} clockOffset={clockOffset} />
           )}
           <Projector />
         </Scene>
@@ -217,6 +247,11 @@ export default function Game() {
             listingsCount={snapshot.listings.length}
             onHouse={(h) => visit(h.id)}
             onLandmark={onLandmark}
+            onPlace={(id) => {
+              setSheet(null);
+              setPlaceId(id);
+            }}
+            trips={trips}
           />
         )}
       </div>
@@ -485,6 +520,19 @@ export default function Game() {
           />
         )}
 
+        {placeId && (
+          <PlaceSheet
+            placeId={placeId}
+            me={me}
+            character={character}
+            households={snapshot.households}
+            now={now}
+            act={act}
+            toast={toast}
+            onClose={() => setPlaceId(null)}
+          />
+        )}
+
         {/* Onboarding */}
         {auth.ready && !auth.authenticated && <Welcome />}
         {auth.authenticated && snapshot.me && !snapshot.me.householdId && <CreateHousehold onCreate={onCreate} />}
@@ -505,6 +553,11 @@ export default function Game() {
               visit(id);
             }}
             onClose={() => setPhone(null)}
+            onPlace={(id) => {
+              setPhone(null);
+              setSheet(null);
+              setPlaceId(id);
+            }}
             onSignOut={async () => {
               setPhone(null);
               await auth.logout();

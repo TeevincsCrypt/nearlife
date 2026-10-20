@@ -27,7 +27,7 @@ export function Hud({
   const isDay = clock.hour >= 6 && clock.hour < 19;
   const ev = WORLD_EVENTS.find((e) => e.id === snapshot.worldEvent?.id) ?? WORLD_EVENTS[0];
   const [evOpen, setEvOpen] = useState(false);
-  const items = snapshot.activity.filter((a) => ["purchase", "listing", "join", "system", "production"].includes(a.type)).slice(0, 8);
+  const items = snapshot.activity.filter((a) => ["purchase", "listing", "join", "system", "production", "action"].includes(a.type)).slice(0, 8);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col items-center gap-1.5 px-2.5 pt-[max(0.6rem,env(safe-area-inset-top))]">

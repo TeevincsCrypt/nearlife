@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
-import { explorerAccountUrl, formatNear, getNativeBalance, NEAR_NETWORK } from "@/lib/near";
+import { explorerFor, formatNear, getNativeBalance, NEAR_NETWORK, type Network } from "@/lib/near";
 import { isValidNearAccountId } from "@/lib/accounts";
 
 export const dynamic = "force-dynamic";
 
 /** Native NEAR balance straight from NEAR RPC. */
 export async function GET(req: Request) {
-  const accountId = new URL(req.url).searchParams.get("account_id") ?? "";
+  const params = new URL(req.url).searchParams;
+  const accountId = params.get("account_id") ?? "";
+  const network: Network = params.get("network") === "mainnet" ? "mainnet" : params.get("network") === "testnet" ? "testnet" : (NEAR_NETWORK as Network);
+  const explorer = `${explorerFor(network)}/address/${accountId}`;
   if (!isValidNearAccountId(accountId)) return NextResponse.json({ error: "invalid account id" }, { status: 400 });
   let b: { exists: boolean; yocto: string };
   try {
-    b = await getNativeBalance(accountId);
+    b = await getNativeBalance(accountId, network);
   } catch {
-    return NextResponse.json({ accountId, network: NEAR_NETWORK, error: "NEAR RPC unavailable", explorer: explorerAccountUrl(accountId) }, { status: 502 });
+    return NextResponse.json({ accountId, network, error: "NEAR RPC unavailable", explorer }, { status: 502 });
   }
   return NextResponse.json({
     accountId,
-    network: NEAR_NETWORK,
+    network,
     exists: b.exists,
     near: formatNear(b.yocto),
-    explorer: explorerAccountUrl(accountId),
+    explorer,
   });
 }
