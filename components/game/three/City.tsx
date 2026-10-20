@@ -4,16 +4,18 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 import { Anchor } from "./anchors";
-import type { ActivityEvent, HouseholdView, NpcRole } from "@/lib/types";
-
-export const ROLE_EMOJI: Record<NpcRole, string> = { chef: "🍲", barista: "☕", host: "🎉", artisan: "🔨", commuter: "💼" };
+import type { ActivityEvent, HouseholdView } from "@/lib/types";
 
 export type Landmark = "market" | "office" | "park";
+
+const NEON = "#00ec97";
+const NEON_2 = "#a78bfa";
+const NEON_3 = "#22d3ee";
 
 const ROADS_X = [-14, 0, 14];
 const ROADS_Z = [-12, 0, 12];
 
-/** House plots sorted by distance from the center; NPCs take the first ones. */
+/** House plots sorted by distance from the center. */
 function plotSlots(): Array<[number, number]> {
   const out: Array<[number, number]> = [];
   for (let x = -28; x <= 28; x += 4.5) {
@@ -21,39 +23,79 @@ function plotSlots(): Array<[number, number]> {
       const nearRoadX = ROADS_X.some((r) => Math.abs(x - r) < 3);
       const nearRoadZ = ROADS_Z.some((r) => Math.abs(z - r) < 3);
       const civic = Math.abs(x) < 12 && Math.abs(z) < 10;
-      const lagoon = z > 22;
-      if (!nearRoadX && !nearRoadZ && !civic && !lagoon) out.push([x, z]);
+      const canal = z > 22;
+      if (!nearRoadX && !nearRoadZ && !civic && !canal) out.push([x, z]);
     }
   }
   return out.sort((a, b) => Math.hypot(a[0], a[1] * 1.2) - Math.hypot(b[0], b[1] * 1.2));
 }
 const SLOTS = plotSlots();
+/** How many empty "available" plots to show after the occupied ones. */
+const OPEN_PLOTS = 4;
 
-function House({ color, big, mine }: { color: string; big?: boolean; mine?: boolean }) {
-  const w = big ? 3 : 2.4;
-  const h = big ? 1.8 : 1.4;
+function Glow({ p, s, c, i = 2 }: { p: [number, number, number]; s: [number, number, number]; c: string; i?: number }) {
+  return (
+    <mesh position={p}>
+      <boxGeometry args={s} />
+      <meshStandardMaterial color={c} emissive={c} emissiveIntensity={i} toneMapped={false} />
+    </mesh>
+  );
+}
+
+/** Modern flat-roof home with neon trim in the household's color. */
+function House({ color, mine }: { color: string; mine?: boolean }) {
+  const w = 2.6;
+  const h = 1.5;
   return (
     <group>
-      <mesh position={[0, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[w + 1.4, w + 1.4]} />
-        <meshStandardMaterial color={mine ? "#fde68a" : "#e7e5e4"} />
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[w + 1.2, w + 1.2]} />
+        <meshStandardMaterial color={mine ? "#3b3a1e" : "#2a2f3f"} />
       </mesh>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[w, h, w]} />
-        <meshStandardMaterial color="#f5f5f4" />
+        <meshStandardMaterial color="#e8e6f0" />
       </mesh>
-      <mesh position={[0, h + 0.55, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
-        <coneGeometry args={[w * 0.82, 1.1, 4]} />
-        <meshStandardMaterial color={color} flatShading />
+      {/* overhanging roof slab */}
+      <mesh position={[0, h + 0.08, 0.1]} castShadow>
+        <boxGeometry args={[w + 0.4, 0.16, w + 0.6]} />
+        <meshStandardMaterial color="#20222e" />
       </mesh>
-      <mesh position={[0.3, 0.45, w / 2 + 0.01]}>
-        <boxGeometry args={[0.5, 0.9, 0.02]} />
-        <meshStandardMaterial color="#5b3a1f" />
+      <Glow p={[0, h - 0.02, w / 2 + 0.41]} s={[w + 0.4, 0.04, 0.03]} c={mine ? "#fbbf24" : color} />
+      {/* glass front + door */}
+      <mesh position={[-0.45, 0.8, w / 2 + 0.01]}>
+        <planeGeometry args={[1.1, 0.9]} />
+        <meshStandardMaterial color="#1b2550" emissive="#fcd34d" emissiveIntensity={0.25} />
       </mesh>
-      <mesh position={[-0.55, 0.85, w / 2 + 0.01]}>
-        <boxGeometry args={[0.5, 0.4, 0.02]} />
-        <meshStandardMaterial color="#bae6fd" />
+      <mesh position={[0.75, 0.5, w / 2 + 0.01]}>
+        <planeGeometry args={[0.5, 1.0]} />
+        <meshStandardMaterial color="#20222e" />
       </mesh>
+    </group>
+  );
+}
+
+/** An empty plot waiting for a new player. */
+function OpenPlot() {
+  return (
+    <group>
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[3.6, 3.6]} />
+        <meshStandardMaterial color="#35503f" />
+      </mesh>
+      {[
+        [0, 1.8, 3.6, 0.05],
+        [0, -1.8, 3.6, 0.05],
+        [1.8, 0, 0.05, 3.6],
+        [-1.8, 0, 0.05, 3.6],
+      ].map(([x, z, w, d], i) => (
+        <Glow key={i} p={[x, 0.04, z]} s={[w, 0.03, d]} c={NEON} i={0.8} />
+      ))}
+      <mesh position={[0, 0.5, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 1]} />
+        <meshStandardMaterial color="#9ca3af" />
+      </mesh>
+      <Glow p={[0, 1.05, 0]} s={[0.8, 0.4, 0.05]} c={NEON} i={0.9} />
     </group>
   );
 }
@@ -63,11 +105,26 @@ function Tree({ p, s = 1 }: { p: [number, number]; s?: number }) {
     <group position={[p[0], 0, p[1]]} scale={s}>
       <mesh position={[0, 0.4, 0]}>
         <cylinderGeometry args={[0.1, 0.13, 0.8]} />
-        <meshStandardMaterial color="#7c4a1e" />
+        <meshStandardMaterial color="#5b3a22" />
       </mesh>
-      <mesh position={[0, 1.15, 0]} castShadow>
-        <coneGeometry args={[0.6, 1.3, 7]} />
-        <meshStandardMaterial color="#3f8f46" flatShading />
+      <mesh position={[0, 1.2, 0]} castShadow>
+        <sphereGeometry args={[0.6, 10, 8]} />
+        <meshStandardMaterial color="#2f7d55" flatShading />
+      </mesh>
+    </group>
+  );
+}
+
+function StreetLamp({ p }: { p: [number, number] }) {
+  return (
+    <group position={[p[0], 0, p[1]]}>
+      <mesh position={[0, 0.9, 0]}>
+        <cylinderGeometry args={[0.05, 0.06, 1.8]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+      <mesh position={[0, 1.85, 0]}>
+        <sphereGeometry args={[0.13, 12, 10]} />
+        <meshStandardMaterial color="#fef3c7" emissive="#fde68a" emissiveIntensity={2} toneMapped={false} />
       </mesh>
     </group>
   );
@@ -85,35 +142,39 @@ function Car({ axis, line, color, speed, offset }: { axis: "x" | "z"; line: numb
   return (
     <group ref={ref}>
       <mesh castShadow>
-        <boxGeometry args={[0.6, 0.3, 1.1]} />
-        <meshStandardMaterial color={color} />
+        <boxGeometry args={[0.6, 0.28, 1.15]} />
+        <meshStandardMaterial color={color} metalness={0.3} roughness={0.4} />
       </mesh>
-      <mesh position={[0, 0.25, -0.05]}>
-        <boxGeometry args={[0.5, 0.22, 0.6]} />
-        <meshStandardMaterial color="#e0f2fe" />
+      <mesh position={[0, 0.24, -0.05]}>
+        <boxGeometry args={[0.5, 0.2, 0.6]} />
+        <meshStandardMaterial color="#0f172a" />
       </mesh>
+      <Glow p={[0, 0, 0.58]} s={[0.45, 0.06, 0.02]} c="#fef3c7" />
+      <Glow p={[0, 0, -0.58]} s={[0.45, 0.06, 0.02]} c="#f43f5e" />
     </group>
   );
 }
 
+/** Night market: stalls under strings of lights. */
 function Market() {
-  const awnings = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#ec4899", "#8b5cf6"];
+  const awnings = [NEON, NEON_2, NEON_3, "#f472b6", "#fbbf24", NEON];
   return (
     <group position={[7, 0, -5.5]}>
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[9, 7]} />
-        <meshStandardMaterial color="#d6c7a1" />
+        <meshStandardMaterial color="#2b2840" />
       </mesh>
       {awnings.map((c, i) => (
         <group key={i} position={[-3 + (i % 3) * 3, 0, -1.5 + Math.floor(i / 3) * 3]}>
           <mesh position={[0, 0.45, 0]}>
             <boxGeometry args={[1.8, 0.9, 1]} />
-            <meshStandardMaterial color="#a16207" />
+            <meshStandardMaterial color="#3f3a5a" />
           </mesh>
-          <mesh position={[0, 1.55, 0]} rotation={[0.25, 0, 0]}>
-            <boxGeometry args={[2.1, 0.08, 1.4]} />
-            <meshStandardMaterial color={c} />
+          <mesh position={[0, 1.6, 0]}>
+            <boxGeometry args={[2.0, 0.06, 1.3]} />
+            <meshStandardMaterial color="#1f1d2e" />
           </mesh>
+          <Glow p={[0, 1.56, 0.66]} s={[2.0, 0.05, 0.03]} c={c} />
           {[-0.9, 0.9].map((x) => (
             <mesh key={x} position={[x, 0.8, -0.55]}>
               <cylinderGeometry args={[0.04, 0.04, 1.6]} />
@@ -122,18 +183,26 @@ function Market() {
           ))}
         </group>
       ))}
+      {/* string lights */}
+      {Array.from({ length: 14 }).map((_, i) => (
+        <mesh key={i} position={[-4 + i * 0.62, 2.35 - Math.sin((i / 13) * Math.PI) * 0.35, 0]}>
+          <sphereGeometry args={[0.07, 8, 6]} />
+          <meshStandardMaterial color="#fde68a" emissive={i % 3 === 0 ? "#f472b6" : "#fde68a"} emissiveIntensity={2} toneMapped={false} />
+        </mesh>
+      ))}
       <Anchor id="lm:market" offsetY={3.2} scaleRef={40} />
     </group>
   );
 }
 
-function Office() {
+/** Work hub: towers with lit window bands. */
+function WorkHub() {
   return (
     <group position={[-7, 0, -5.5]}>
       {[
-        [-1.6, 0, 7, "#64748b"],
-        [1.4, -0.5, 10, "#475569"],
-        [0.2, 2, 5, "#94a3b8"],
+        [-1.6, 0, 7, "#2b3245"],
+        [1.4, -0.5, 10, "#232a3b"],
+        [0.2, 2, 5, "#353d52"],
       ].map(([x, z, h, c], i) => (
         <group key={i} position={[x as number, 0, z as number]}>
           <mesh position={[0, (h as number) / 2, 0]} castShadow>
@@ -141,11 +210,9 @@ function Office() {
             <meshStandardMaterial color={c as string} />
           </mesh>
           {Array.from({ length: Math.floor((h as number) / 1.2) }).map((_, j) => (
-            <mesh key={j} position={[0, 0.8 + j * 1.2, 1.21]}>
-              <boxGeometry args={[2.0, 0.5, 0.02]} />
-              <meshStandardMaterial color="#bfdbfe" emissive="#60a5fa" emissiveIntensity={0.15} />
-            </mesh>
+            <Glow key={j} p={[0, 0.8 + j * 1.2, 1.21]} s={[2.0, 0.18, 0.02]} c={j % 2 ? NEON_3 : "#93c5fd"} i={0.9} />
           ))}
+          <Glow p={[0, h as number, 0]} s={[2.42, 0.06, 2.42]} c={NEON_2} i={1.4} />
         </group>
       ))}
       <Anchor id="lm:office" offsetY={11.5} scaleRef={40} />
@@ -153,25 +220,33 @@ function Office() {
   );
 }
 
-function Park() {
+/** Plaza with a neon fountain. */
+function Plaza() {
   return (
     <group position={[-7, 0, 5.5]}>
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[9, 7]} />
-        <meshStandardMaterial color="#86c26b" />
+        <meshStandardMaterial color="#3d6b56" />
       </mesh>
-      <mesh position={[1, 0.04, 0.5]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[1.8, 24]} />
-        <meshStandardMaterial color="#38bdf8" />
+      <mesh position={[0.5, 0.15, 0.3]}>
+        <cylinderGeometry args={[1.6, 1.7, 0.3, 32]} />
+        <meshStandardMaterial color="#3a3f55" />
+      </mesh>
+      <mesh position={[0.5, 0.31, 0.3]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[1.45, 32]} />
+        <meshStandardMaterial color="#0e7490" emissive="#22d3ee" emissiveIntensity={0.5} />
+      </mesh>
+      <mesh position={[0.5, 0.33, 0.3]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[1.62, 0.04, 8, 48]} />
+        <meshStandardMaterial color={NEON} emissive={NEON} emissiveIntensity={2} toneMapped={false} />
       </mesh>
       {[
         [-3, -2],
         [-3.3, 1.8],
         [3.4, -2.4],
         [3.2, 2.5],
-        [-1, -2.8],
       ].map((p, i) => (
-        <Tree key={i} p={p as [number, number]} s={1.2} />
+        <Tree key={i} p={p as [number, number]} s={1.1} />
       ))}
       <Anchor id="lm:park" offsetY={3} scaleRef={40} />
     </group>
@@ -193,42 +268,39 @@ function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   return lines;
 }
 
-/** Billboard showing the latest trade, drawn into a canvas texture. */
-function Billboard({ text }: { text: string }) {
+/** Screen showing the latest trade, drawn into a canvas texture. */
+function TradeScreen({ text }: { text: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 1024;
     canvas.height = 456;
     const ctx = canvas.getContext("2d")!;
-    const g = ctx.createLinearGradient(0, 0, 1024, 456);
-    g.addColorStop(0, "#4f46e5");
-    g.addColorStop(0.55, "#7c3aed");
-    g.addColorStop(1, "#c026d3");
-    ctx.fillStyle = g;
+    ctx.fillStyle = "#0b0d17";
     ctx.fillRect(0, 0, 1024, 456);
-    ctx.fillStyle = "#f5d0fe";
-    ctx.font = "bold 34px system-ui, sans-serif";
-    ctx.fillText("● LIVE · NEIGHBORHOOD MARKET", 48, 80);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 52px system-ui, sans-serif";
+    ctx.strokeStyle = NEON;
+    ctx.lineWidth = 10;
+    ctx.strokeRect(10, 10, 1004, 436);
+    ctx.fillStyle = NEON;
+    ctx.font = "bold 34px ui-monospace, monospace";
+    ctx.fillText("▲ NEARLIFE TRADES · LIVE", 48, 80);
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "800 50px system-ui, sans-serif";
     wrap(ctx, text, 930)
       .slice(0, 5)
-      .forEach((l, i) => ctx.fillText(l, 48, 160 + i * 64));
+      .forEach((l, i) => ctx.fillText(l, 48, 160 + i * 62));
     const t = new CanvasTexture(canvas);
     t.colorSpace = SRGBColorSpace;
     return t;
   }, [text]);
   return (
     <group position={[7, 0, 5.5]}>
-      {[-2.2, 2.2].map((x) => (
-        <mesh key={x} position={[x, 1.6, 0]}>
-          <cylinderGeometry args={[0.1, 0.1, 3.2]} />
-          <meshStandardMaterial color="#334155" />
-        </mesh>
-      ))}
+      <mesh position={[0, 1.6, 0]}>
+        <boxGeometry args={[0.3, 3.2, 0.3]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
       <mesh position={[0, 3.6, 0]}>
         <boxGeometry args={[5.4, 2.6, 0.2]} />
-        <meshStandardMaterial color="#1e1b4b" />
+        <meshStandardMaterial color="#0b0d17" />
       </mesh>
       <mesh position={[0, 3.6, 0.11]}>
         <planeGeometry args={[5.1, 2.27]} />
@@ -238,64 +310,76 @@ function Billboard({ text }: { text: string }) {
   );
 }
 
-/** Same ordering the map uses, so overlay markers can match houses by id. */
+/** Player households in plot order, so overlay markers can match houses by id. */
 export function cityPlacement(households: HouseholdView[]) {
-  const npcs = households.filter((h) => h.kind === "npc").sort((a, b) => a.id.localeCompare(b.id));
-  const players = households.filter((h) => h.kind === "player").sort((a, b) => a.createdAt - b.createdAt);
-  return [...npcs, ...players].slice(0, SLOTS.length).map((h, i) => ({ h, pos: SLOTS[i] }));
+  return [...households]
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(0, SLOTS.length)
+    .map((h, i) => ({ h, pos: SLOTS[i] }));
 }
 
 export function City({ households, myHouseholdId, latestTrade }: { households: HouseholdView[]; myHouseholdId?: string | null; latestTrade?: ActivityEvent }) {
   const placed = useMemo(() => cityPlacement(households), [households]);
+  const open = SLOTS.slice(placed.length, placed.length + OPEN_PLOTS);
+  const lamps = useMemo(() => {
+    const out: Array<[number, number]> = [];
+    for (const z of ROADS_Z) for (let x = -30; x <= 30; x += 7.5) out.push([x + 1.6, z + 1.6]);
+    return out;
+  }, []);
 
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[90, 90]} />
-        <meshStandardMaterial color="#9dc97f" />
+        <meshStandardMaterial color="#4c7a61" />
       </mesh>
-      {/* lagoon */}
+      {/* canal */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0, 34]}>
         <planeGeometry args={[90, 22]} />
-        <meshStandardMaterial color="#4fb3e8" />
+        <meshStandardMaterial color="#1d4f86" emissive="#1e3a8a" emissiveIntensity={0.3} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 23.2]}>
-        <planeGeometry args={[90, 1.2]} />
-        <meshStandardMaterial color="#e9dcb5" />
-      </mesh>
+      <Glow p={[0, 0.02, 23.2]} s={[90, 0.03, 0.12]} c={NEON_3} i={1.2} />
       {ROADS_X.map((x) => (
-        <mesh key={`rx${x}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, -5]}>
-          <planeGeometry args={[2.4, 56]} />
-          <meshStandardMaterial color="#6b7280" />
-        </mesh>
+        <group key={`rx${x}`}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, -5]}>
+            <planeGeometry args={[2.4, 56]} />
+            <meshStandardMaterial color="#262a36" />
+          </mesh>
+          <Glow p={[x, 0.02, -5]} s={[0.06, 0.01, 56]} c={NEON} i={1.1} />
+        </group>
       ))}
       {ROADS_Z.map((z) => (
-        <mesh key={`rz${z}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, z]}>
-          <planeGeometry args={[80, 2.4]} />
-          <meshStandardMaterial color="#6b7280" />
-        </mesh>
+        <group key={`rz${z}`}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, z]}>
+            <planeGeometry args={[80, 2.4]} />
+            <meshStandardMaterial color="#262a36" />
+          </mesh>
+          <Glow p={[0, 0.022, z]} s={[80, 0.01, 0.06]} c={NEON} i={1.1} />
+        </group>
       ))}
-      {ROADS_Z.map((z) => (
-        <mesh key={`lz${z}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, z]}>
-          <planeGeometry args={[80, 0.08]} />
-          <meshStandardMaterial color="#fde68a" />
-        </mesh>
+      {lamps.map((p, i) => (
+        <StreetLamp key={i} p={p} />
       ))}
-      <Car axis="x" line={0} color="#ef4444" speed={4} offset={0} />
-      <Car axis="x" line={12} color="#facc15" speed={-3.2} offset={20} />
-      <Car axis="z" line={14} color="#3b82f6" speed={3.6} offset={10} />
-      <Car axis="z" line={-14} color="#f8fafc" speed={-4.2} offset={40} />
-      <Car axis="x" line={-12} color="#22c55e" speed={3} offset={33} />
+      <Car axis="x" line={0} color="#f43f5e" speed={4} offset={0} />
+      <Car axis="x" line={12} color="#fbbf24" speed={-3.2} offset={20} />
+      <Car axis="z" line={14} color="#22d3ee" speed={3.6} offset={10} />
+      <Car axis="z" line={-14} color="#e5e7eb" speed={-4.2} offset={40} />
+      <Car axis="x" line={-12} color="#a78bfa" speed={3} offset={33} />
 
       <Market />
-      <Office />
-      <Park />
-      <Billboard text={latestTrade ? `${latestTrade.emoji} ${latestTrade.text}` : "Cook, craft or host, then list it. Neighbors and NPC agents buy what they need."} />
+      <WorkHub />
+      <Plaza />
+      <TradeScreen text={latestTrade ? `${latestTrade.emoji} ${latestTrade.text}` : "No trades yet. Make something and list it on the night market."} />
 
       {placed.map(({ h, pos }) => (
         <group key={h.id} position={[pos[0], 0, pos[1]]}>
-          <House color={h.color} big={h.kind === "npc"} mine={h.id === myHouseholdId} />
-          <Anchor id={`hh:${h.id}`} offsetY={3.4} scaleRef={40} />
+          <House color={h.color} mine={h.id === myHouseholdId} />
+          <Anchor id={`hh:${h.id}`} offsetY={3.2} scaleRef={40} />
+        </group>
+      ))}
+      {open.map((pos, i) => (
+        <group key={`open${i}`} position={[pos[0], 0, pos[1]]}>
+          <OpenPlot />
         </group>
       ))}
 

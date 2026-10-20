@@ -62,7 +62,6 @@ export async function POST(req: Request) {
       const hh: Household = {
         id,
         name,
-        kind: "player",
         accountId,
         accountSource,
         ownerIds: [user!.userId],
@@ -90,7 +89,6 @@ export async function POST(req: Request) {
       addActivity(state, {
         householdId: id,
         householdName: name,
-        isNpc: false,
         ts: now,
         type: "join",
         emoji: "🏠",

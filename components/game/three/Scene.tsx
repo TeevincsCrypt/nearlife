@@ -17,18 +17,18 @@ function daylight(hour: number, minute: number) {
 function Lights({ day, powerCut }: { day: number; powerCut: boolean }) {
   const { scene } = useThree();
   useEffect(() => {
-    const night = new Color("#22355e");
-    const sky = new Color("#bfe0f2");
+    const night = new Color("#141936");
+    const sky = new Color("#8ec5de");
     scene.background = night.lerp(sky, day);
   }, [day, scene]);
   return (
     <>
-      <hemisphereLight args={["#ffffff", "#8aa37a", 0.75 + day * 0.35]} />
+      <hemisphereLight args={["#e0e7ff", "#3f5a4c", 0.7 + day * 0.4]} />
       <ambientLight intensity={(powerCut ? 0.3 : 0.45) + day * 0.2} color={day > 0.5 ? "#ffffff" : "#dbe4ff"} />
       <directionalLight
         position={[10, 18, 8]}
         intensity={0.6 + day * 1.0}
-        color={day > 0.3 ? "#fff6e5" : "#a5b4fc"}
+        color={day > 0.3 ? "#ffe8cc" : "#a5b4fc"}
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-14}

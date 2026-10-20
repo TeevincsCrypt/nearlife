@@ -3,7 +3,7 @@ import { readState } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-/** Public activity feed: listings, purchases (players and NPCs), production, social actions. */
+/** Public activity feed: listings, purchases, production, social actions. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const limit = Math.min(150, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));

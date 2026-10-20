@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     ({ state, now, user, household }) => {
       if (household) throw new HttpError(409, "You already have a household");
       const target = state.households[(body.householdId ?? "").trim()];
-      if (!target || target.kind !== "player") throw new HttpError(404, "No player household with that invite code");
+      if (!target) throw new HttpError(404, "No player household with that invite code");
       if (target.ownerIds.length >= 4) throw new HttpError(400, "That household is full");
       target.ownerIds.push(user!.userId);
       const displayName = (body.displayName ?? "").trim().slice(0, 24) || "Player";
@@ -21,7 +21,6 @@ export async function POST(req: Request) {
       addActivity(state, {
         householdId: target.id,
         householdName: target.name,
-        isNpc: false,
         ts: now,
         type: "join",
         emoji: "🤝",

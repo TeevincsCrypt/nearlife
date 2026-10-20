@@ -4,7 +4,7 @@ import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "NEARLIFE",
-  description: "A shared life-sim neighborhood where players and autonomous NPC agents earn, spend and trade NEP-245 tokens on NEAR.",
+  description: "A shared 3D life-sim neighborhood where players earn, spend and trade NEP-245 tokens on NEAR.",
   appleWebApp: { capable: true, title: "NEARLIFE", statusBarStyle: "default" },
 };
 

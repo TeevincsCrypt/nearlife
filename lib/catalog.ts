@@ -1,4 +1,4 @@
-import type { NeedKey, Needs, NpcRole } from "./types";
+import type { NeedKey, Needs } from "./types";
 
 export const CURRENCY = "simbucks";
 export const CURRENCY_SYMBOL = "SB";
@@ -150,7 +150,7 @@ export const FURNITURE_CATEGORIES: Array<{ id: FurnitureCategory; label: string;
   { id: "work", label: "Work", emoji: "🔨" },
 ];
 
-/** Furniture that the Craft action can produce (and players/NPCs trade on the market). */
+/** Furniture that the Craft action can produce (and players trade on the market). */
 export const CRAFTABLE = ["comfy_bed", "arcade", "armchair", "sofa", "bookshelf"];
 
 export const ROOM_SIZE = 8;
@@ -355,22 +355,6 @@ export const DECAY_PER_MIN: Needs = {
   hygiene: 4,
 };
 
-export const ROLE_PRODUCTION: Record<NpcRole, string[]> = {
-  chef: ["cook"],
-  barista: ["brew"],
-  host: ["host_party", "game_night"],
-  artisan: ["craft", "run_spa"],
-  commuter: [],
-};
-
-export const ROLE_LABEL: Record<NpcRole, string> = {
-  chef: "Cooks & sells meals",
-  barista: "Brews & sells espresso",
-  host: "Sells party & game-night seats",
-  artisan: "Crafts furniture, runs a spa",
-  commuter: "Office workers, buy everything",
-};
-
 export function itemsForNeed(need: NeedKey): ItemDef[] {
   return Object.values(ITEMS).filter((i) => (i.effects?.[need] ?? 0) > 0);
 }
@@ -387,8 +371,6 @@ export interface WorldEventDef {
   workPay?: number;
   /** Powered furniture can't be used. */
   powerCut?: boolean;
-  /** NPCs shop more eagerly (added to buy threshold). */
-  buyBoost?: number;
 }
 
 export const WORLD_EVENTS: WorldEventDef[] = [
@@ -417,14 +399,6 @@ export const WORLD_EVENTS: WorldEventDef[] = [
     description: "Hygiene and energy drop 1.5× faster. Showers and espresso are in demand.",
     weight: 2,
     decay: { hygiene: 1.5, energy: 1.5 },
-  },
-  {
-    id: "market_day",
-    title: "Market day",
-    emoji: "🛍️",
-    description: "NPC households are in a shopping mood and buy more from the market.",
-    weight: 2,
-    buyBoost: 12,
   },
 ];
 

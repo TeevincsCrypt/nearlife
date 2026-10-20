@@ -1,6 +1,6 @@
 import { after, NextResponse } from "next/server";
 import { getUser, guestEnabled, privyEnabled, type AuthUser } from "./auth";
-import { GameError, NPC_TICK_MS, advance, getHousehold, snapshot } from "./engine";
+import { GameError, advance, getHousehold, snapshot } from "./engine";
 import { ESCROW_ACCOUNT, LedgerError } from "./nep245";
 import { NEAR_NETWORK, NEP245_CONTRACT_ID, settleEvents, settlementMode } from "./near";
 import { mutateState, storageMode } from "./store";
@@ -14,7 +14,6 @@ export function gameConfig(): StateSnapshot["config"] {
     network: NEAR_NETWORK,
     nep245Contract: NEP245_CONTRACT_ID || "(off-chain ledger)",
     escrowAccount: ESCROW_ACCOUNT,
-    npcTickMs: NPC_TICK_MS,
   };
 }
 
@@ -40,7 +39,7 @@ export class HttpError extends Error {
 export async function runGame<T>(
   req: Request,
   fn: (ctx: { state: GameState; now: number; user: AuthUser | null; household: Household | null }) => T,
-  opts: { auth?: boolean; household?: boolean; forceNpcTick?: boolean } = {},
+  opts: { auth?: boolean; household?: boolean } = {},
 ) {
   try {
     const user = await getUser(req);
@@ -49,7 +48,7 @@ export async function runGame<T>(
     const { state, result } = await mutateState((state) => {
       const now = Date.now();
       fromSeq = state.nep245Seq ?? 0;
-      advance(state, now, { forceNpcTick: opts.forceNpcTick });
+      advance(state, now);
       let household: Household | null = null;
       if (user) {
         const hid = state.players[user.userId];

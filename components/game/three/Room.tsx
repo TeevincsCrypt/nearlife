@@ -8,7 +8,7 @@ import { canPlace, footprint } from "@/lib/layout";
 import type { Character, HouseholdView, PlacedFurniture } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { FurnitureModel } from "./FurnitureModel";
-import { Character3D, Plumbob3D, type Pose } from "./Character3D";
+import { Character3D, Halo, type Pose } from "./Character3D";
 import { Anchor } from "./anchors";
 
 const HALF = ROOM_SIZE / 2;
@@ -25,9 +25,21 @@ export interface Placement {
 }
 
 export function moodColor(mood: number) {
-  if (mood >= 65) return "#22c55e";
-  if (mood >= 35) return "#eab308";
-  return "#ef4444";
+  if (mood >= 65) return "#00ec97";
+  if (mood >= 35) return "#fbbf24";
+  return "#fb7185";
+}
+
+const NEON = "#00ec97";
+const NEON_2 = "#a78bfa";
+
+function Strip({ p, s, c }: { p: [number, number, number]; s: [number, number, number]; c: string }) {
+  return (
+    <mesh position={p}>
+      <boxGeometry args={s} />
+      <meshStandardMaterial color={c} emissive={c} emissiveIntensity={2.2} toneMapped={false} />
+    </mesh>
+  );
 }
 
 export function charMood(c: Character) {
@@ -168,14 +180,14 @@ function RoomCharacter({
       }}
     >
       <Character3D look={c.look} pose={pose} />
-      {selected && !hidden && <Plumbob3D color={moodColor(mood)} />}
+      {selected && !hidden && <Halo color={moodColor(mood)} />}
       <Anchor id={`char:${c.id}`} offsetY={selected ? 1.95 : 1.55} />
     </group>
   );
 }
 
 function Floor({ color, onTap, onHover }: { color: string; onTap: (x: number, z: number) => void; onHover?: (x: number, z: number) => void }) {
-  const lighter = useMemo(() => new Color(color).lerp(new Color("#ffffff"), 0.18).getStyle(), [color]);
+  const lighter = useMemo(() => new Color(color).lerp(new Color("#ffffff"), 0.07).getStyle(), [color]);
   const tiles = useMemo(() => {
     const out: Array<{ x: number; z: number; dark: boolean }> = [];
     for (let x = 0; x < ROOM_SIZE; x++) for (let z = 0; z < ROOM_SIZE; z++) out.push({ x, z, dark: (Math.floor(x / 2) + Math.floor(z / 2)) % 2 === 0 });
@@ -216,9 +228,18 @@ function Floor({ color, onTap, onHover }: { color: string; onTap: (x: number, z:
   );
 }
 
-function Walls({ color }: { color: string }) {
+function Walls({ color, glow }: { color: string; glow: boolean }) {
   return (
     <group>
+      {/* neon LED strips under the wall caps and along the skirting */}
+      {glow && (
+        <>
+          <Strip p={[0, WALL_H - 0.06, -HALF + 0.01]} s={[ROOM_SIZE, 0.04, 0.03]} c={NEON} />
+          <Strip p={[-HALF + 0.01, WALL_H - 0.06, 0]} s={[0.03, 0.04, ROOM_SIZE]} c={NEON} />
+          <Strip p={[0, 0.04, -HALF + 0.01]} s={[ROOM_SIZE, 0.025, 0.03]} c={NEON_2} />
+          <Strip p={[-HALF + 0.01, 0.04, 0]} s={[0.03, 0.025, ROOM_SIZE]} c={NEON_2} />
+        </>
+      )}
       {/* back-right wall (north, along x) */}
       <mesh position={[0, WALL_H / 2, -HALF - 0.075]} receiveShadow castShadow>
         <boxGeometry args={[ROOM_SIZE + 0.3, WALL_H, 0.15]} />
@@ -232,11 +253,11 @@ function Walls({ color }: { color: string }) {
       {/* wall caps */}
       <mesh position={[0, WALL_H + 0.04, -HALF - 0.075]}>
         <boxGeometry args={[ROOM_SIZE + 0.3, 0.08, 0.2]} />
-        <meshStandardMaterial color="#f5e6b8" />
+        <meshStandardMaterial color="#1e1b2e" />
       </mesh>
       <mesh position={[-HALF - 0.075, WALL_H + 0.04, 0]}>
         <boxGeometry args={[0.2, 0.08, ROOM_SIZE]} />
-        <meshStandardMaterial color="#f5e6b8" />
+        <meshStandardMaterial color="#1e1b2e" />
       </mesh>
       {/* door */}
       <mesh position={[-HALF + 0.005, 1.0, DOOR[1]]}>
@@ -247,36 +268,51 @@ function Walls({ color }: { color: string }) {
         <sphereGeometry args={[0.04]} />
         <meshStandardMaterial color="#facc15" metalness={0.6} />
       </mesh>
-      {/* window with burglar bars */}
-      <group position={[2, 1.45, -HALF + 0.01]}>
+      {/* wide window onto the night skyline */}
+      <group position={[1.6, 1.45, -HALF + 0.01]}>
         <mesh>
-          <boxGeometry args={[1.8, 1.1, 0.03]} />
-          <meshStandardMaterial color="#e0f2fe" emissive="#bae6fd" emissiveIntensity={0.3} />
+          <boxGeometry args={[2.6, 1.2, 0.04]} />
+          <meshStandardMaterial color="#111426" />
         </mesh>
-        {[-0.75, -0.45, -0.15, 0.15, 0.45, 0.75].map((x) => (
-          <mesh key={x} position={[x, 0, 0.03]}>
-            <boxGeometry args={[0.04, 1.1, 0.04]} />
-            <meshStandardMaterial color="#334155" />
+        <mesh position={[0, 0, 0.025]}>
+          <planeGeometry args={[2.45, 1.05]} />
+          <meshStandardMaterial color="#1b2550" emissive="#2a3a8a" emissiveIntensity={0.6} />
+        </mesh>
+        {[
+          [-0.9, 0.25],
+          [-0.55, 0.4],
+          [-0.2, 0.18],
+          [0.15, 0.5],
+          [0.5, 0.3],
+          [0.85, 0.42],
+        ].map(([x, h], i) => (
+          <mesh key={i} position={[x, -0.52 + h / 2, 0.03]}>
+            <planeGeometry args={[0.3, h]} />
+            <meshStandardMaterial color="#0b0f24" emissive={i % 2 ? "#f0abfc" : "#67e8f9"} emissiveIntensity={0.25} />
           </mesh>
         ))}
+        <mesh position={[0, 0, 0.04]}>
+          <boxGeometry args={[0.04, 1.05, 0.02]} />
+          <meshStandardMaterial color="#111426" />
+        </mesh>
       </group>
-      {/* wall lamp + clock */}
-      <mesh position={[-1.5, 2.0, -HALF + 0.05]}>
-        <boxGeometry args={[0.18, 0.25, 0.08]} />
-        <meshStandardMaterial color="#e5e7eb" />
+      {/* neon ring sign + wall clock */}
+      <mesh position={[-HALF + 0.03, 1.7, 1.0]} rotation={[0, Math.PI / 2, 0]}>
+        <torusGeometry args={[0.28, 0.025, 10, 40]} />
+        <meshStandardMaterial color={NEON_2} emissive={NEON_2} emissiveIntensity={2} toneMapped={false} />
       </mesh>
-      <mesh position={[-HALF + 0.05, 1.9, -1.2]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[-HALF + 0.05, 1.9, -1.2]} rotation={[0, 0, Math.PI / 2]}>
         <cylinderGeometry args={[0.18, 0.18, 0.04, 20]} />
-        <meshStandardMaterial color="#f8fafc" />
+        <meshStandardMaterial color="#e5e7eb" />
       </mesh>
       {/* low front ledges so the room reads as a cutaway */}
       <mesh position={[0, 0.08, HALF + 0.05]}>
         <boxGeometry args={[ROOM_SIZE + 0.3, 0.16, 0.1]} />
-        <meshStandardMaterial color="#e9d8a6" />
+        <meshStandardMaterial color="#1e1b2e" />
       </mesh>
       <mesh position={[HALF + 0.05, 0.08, 0]}>
         <boxGeometry args={[0.1, 0.16, ROOM_SIZE]} />
-        <meshStandardMaterial color="#e9d8a6" />
+        <meshStandardMaterial color="#1e1b2e" />
       </mesh>
     </group>
   );
@@ -287,12 +323,12 @@ function Yard() {
     <group>
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[16, 48]} />
-        <meshStandardMaterial color="#a7c98b" />
+        <meshStandardMaterial color="#4f7a64" />
       </mesh>
       {/* front path */}
       <mesh position={[2.5, -0.01, HALF + 1.6]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[2.2, 3]} />
-        <meshStandardMaterial color="#cbbfa8" />
+        <meshStandardMaterial color="#3a3f55" />
       </mesh>
       {[
         [-6, -5],
@@ -349,8 +385,8 @@ export function Room({
   return (
     <group>
       <Yard />
-      <Floor color={household.floorColor ?? "#c8a27a"} onTap={(x, z) => onFloorTap?.(x, z)} onHover={onFloorHover} />
-      <Walls color={household.wallColor ?? "#d9c27a"} />
+      <Floor color={household.floorColor ?? "#8a6a50"} onTap={(x, z) => onFloorTap?.(x, z)} onHover={onFloorHover} />
+      <Walls color={household.wallColor ?? "#3a3f63"} glow={lightsOn} />
 
       {layout.map((f) => {
         const item = ITEMS[f.itemId];

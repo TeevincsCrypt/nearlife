@@ -1,29 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, ITEMS, NEED_META, ROLE_LABEL, WORLD_EVENTS, gameClock } from "@/lib/catalog";
+import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, ITEMS, NEED_META, WORLD_EVENTS, gameClock } from "@/lib/catalog";
 import { placedCount } from "@/lib/layout";
 import type { Character, HouseholdView, NeedKey, StateSnapshot } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn, shortAccount, timeAgo } from "@/lib/utils";
 
-export type AppId = "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "agents" | "about";
+export type AppId = "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "leaders" | "about";
 
-const APPS: Array<{ id: AppId; label: string; emoji: string; bg: string }> = [
-  { id: "jobs", label: "Jobs", emoji: "💼", bg: "from-emerald-500 to-green-600" },
-  { id: "market", label: "Market", emoji: "🛒", bg: "from-orange-400 to-amber-500" },
-  { id: "sell", label: "Sell", emoji: "🏷️", bg: "from-pink-500 to-rose-500" },
-  { id: "make", label: "Make", emoji: "🍳", bg: "from-red-500 to-orange-500" },
-  { id: "bag", label: "Bag", emoji: "🎒", bg: "from-yellow-400 to-amber-500" },
-  { id: "neighbors", label: "Neighbors", emoji: "🏘️", bg: "from-teal-400 to-cyan-600" },
-  { id: "agents", label: "Agents", emoji: "🤖", bg: "from-violet-500 to-indigo-600" },
-  { id: "about", label: "NEARLIFE", emoji: "ℹ️", bg: "from-slate-600 to-slate-800" },
-];
-const DOCK: Array<{ id: AppId | "call"; emoji: string; bg: string }> = [
-  { id: "call", emoji: "📞", bg: "from-green-400 to-emerald-500" },
-  { id: "feed", emoji: "💬", bg: "from-sky-400 to-blue-600" },
-  { id: "wallet", emoji: "🪙", bg: "from-amber-300 to-yellow-500" },
-  { id: "market", emoji: "🛒", bg: "from-orange-400 to-amber-500" },
+const APPS: Array<{ id: AppId; label: string; emoji: string; color: string }> = [
+  { id: "jobs", label: "Jobs", emoji: "💼", color: "#00ec97" },
+  { id: "market", label: "Market", emoji: "🛒", color: "#fbbf24" },
+  { id: "sell", label: "Sell", emoji: "🏷️", color: "#f472b6" },
+  { id: "make", label: "Make", emoji: "🍳", color: "#fb923c" },
+  { id: "bag", label: "Bag", emoji: "🎒", color: "#facc15" },
+  { id: "neighbors", label: "Neighbors", emoji: "🏘️", color: "#22d3ee" },
+  { id: "leaders", label: "Leaders", emoji: "🏆", color: "#a78bfa" },
+  { id: "feed", label: "Feed", emoji: "📡", color: "#60a5fa" },
+  { id: "wallet", label: "Wallet", emoji: "◈", color: "#00ec97" },
+  { id: "about", label: "About", emoji: "ℹ️", color: "#94a3b8" },
 ];
 
 type Act = <T = unknown>(path: string, body?: unknown, method?: "POST" | "DELETE") => Promise<T | null>;
@@ -39,26 +35,24 @@ interface Props {
   toast: (t: string, k?: "info" | "error" | "success") => void;
   onVisit: (id: string) => void;
   onClose: () => void;
-  onNpcTick: () => void;
   onSignOut: () => void;
 }
 
 function Row({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex items-center gap-3 rounded-2xl bg-white/90 p-3 text-slate-800", className)}>{children}</div>;
+  return <div className={cn("flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.05] p-3 text-slate-200", className)}>{children}</div>;
 }
 
-function Btn({ children, onClick, disabled, tone = "green" }: { children: ReactNode; onClick?: () => void; disabled?: boolean; tone?: "green" | "dark" | "light" | "red" }) {
+function Btn({ children, onClick, disabled, tone = "neon" }: { children: ReactNode; onClick?: () => void; disabled?: boolean; tone?: "neon" | "ghost" | "red" }) {
   const tones = {
-    green: "bg-emerald-500 text-white",
-    dark: "bg-slate-900 text-white",
-    light: "bg-slate-100 text-slate-700",
-    red: "bg-rose-100 text-rose-700",
+    neon: "btn-neon",
+    ghost: "bg-white/10 text-slate-200",
+    red: "bg-rose-500/15 text-rose-300",
   };
   return (
     <button
       disabled={disabled}
       onClick={onClick}
-      className={cn("shrink-0 cursor-pointer rounded-full px-3.5 py-1.5 text-sm font-bold active:scale-95 disabled:cursor-not-allowed disabled:opacity-40", tones[tone])}
+      className={cn("shrink-0 cursor-pointer rounded-xl px-3 py-1.5 text-sm font-bold active:scale-95 disabled:cursor-not-allowed disabled:opacity-35", tones[tone])}
     >
       {children}
     </button>
@@ -67,11 +61,11 @@ function Btn({ children, onClick, disabled, tone = "green" }: { children: ReactN
 
 function Effects({ itemId }: { itemId: string }) {
   const item = ITEMS[itemId];
-  if (item.furniture) return <span className="text-[11px] text-slate-500">{item.description}</span>;
+  if (item.furniture) return <span className="text-[11px] text-slate-400">{item.description}</span>;
   return (
     <span className="flex flex-wrap gap-1">
       {Object.entries(item.effects ?? {}).map(([k, v]) => (
-        <span key={k} className="rounded bg-emerald-50 px-1.5 text-[11px] text-emerald-700">
+        <span key={k} className="rounded-md bg-[#00ec97]/10 px-1.5 text-[11px] text-[#00ec97]">
           {NEED_META[k as NeedKey].emoji}+{v}
         </span>
       ))}
@@ -81,18 +75,18 @@ function Effects({ itemId }: { itemId: string }) {
 
 function JobsApp({ snapshot, me, now, act, toast }: Props) {
   const ev = WORLD_EVENTS.find((e) => e.id === snapshot.worldEvent?.id);
-  if (!me) return <p className="text-white">Create a household first.</p>;
+  if (!me) return <Row>Move in first.</Row>;
   return (
     <div className="space-y-2">
-      {ev?.workPay && <Row className="bg-amber-100">💰 Payday! Shifts pay {ev.workPay}× right now.</Row>}
+      {ev?.workPay && <Row className="border-amber-300/30 bg-amber-300/10 text-amber-200">💰 Payday! Shifts pay {ev.workPay}× right now.</Row>}
       {me.characters.map((c) => {
         const busy = c.busy && c.busy.until > now ? c.busy : null;
         return (
           <Row key={c.id}>
             <span className="text-2xl">{c.avatar}</span>
             <div className="min-w-0 flex-1">
-              <div className="font-bold">{c.name}</div>
-              <div className="text-xs text-slate-500">{busy ? `${busy.label}… ${Math.ceil((busy.until - now) / 1000)}s` : "Available"}</div>
+              <div className="font-bold text-white">{c.name}</div>
+              <div className="text-xs text-slate-400">{busy ? `${busy.label}… ${Math.ceil((busy.until - now) / 1000)}s` : "Available"}</div>
             </div>
             <Btn
               disabled={!!busy}
@@ -101,14 +95,13 @@ function JobsApp({ snapshot, me, now, act, toast }: Props) {
                 if (ok) toast(`${c.name} went to work 💼`, "success");
               }}
             >
-              Office shift
+              Shift
             </Btn>
           </Row>
         );
       })}
-      <p className="px-1 text-xs text-white/80">
-        A shift takes {ACTIONS.work.durationSec}s and pays ~{ACTIONS.work.pay} {CURRENCY_SYMBOL} (less when your Sim is unhappy). Pay is minted to your household&apos;s NEAR
-        account as a NEP-245 token.
+      <p className="px-1 text-xs text-slate-400">
+        A shift takes {ACTIONS.work.durationSec}s and pays ~{ACTIONS.work.pay} {CURRENCY_SYMBOL} (less when your Sim is unhappy), minted to your NEAR account as a NEP-245 token.
       </p>
     </div>
   );
@@ -132,13 +125,13 @@ function MarketApp({ snapshot, me, act, toast }: Props) {
           <button
             key={n}
             onClick={() => setNeed(n)}
-            className={cn("shrink-0 cursor-pointer rounded-full px-3 py-1 text-xs font-bold", need === n ? "bg-white text-slate-900" : "bg-white/20 text-white")}
+            className={cn("shrink-0 cursor-pointer rounded-lg px-2.5 py-1 text-xs font-bold", need === n ? "bg-white text-slate-900" : "bg-white/10 text-slate-300")}
           >
             {n === "all" ? "All" : n === "furniture" ? "🛋️ Furniture" : `${NEED_META[n].emoji} ${NEED_META[n].label}`}
           </button>
         ))}
       </div>
-      {list.length === 0 && <Row>Nothing listed right now. NPCs restock every few ticks.</Row>}
+      {list.length === 0 && <Row className="text-sm">No listings yet. Be the first: make something and list it in 🏷️ Sell.</Row>}
       {list.map((l) => {
         const it = ITEMS[l.itemId];
         const seller = byId.get(l.sellerHouseholdId);
@@ -147,16 +140,14 @@ function MarketApp({ snapshot, me, act, toast }: Props) {
           <Row key={l.id}>
             <span className="text-3xl">{it.emoji}</span>
             <div className="min-w-0 flex-1">
-              <div className="font-bold">
-                {it.name} <span className="text-xs font-medium text-slate-400">×{l.quantity}</span>
+              <div className="font-bold text-white">
+                {it.name} <span className="text-xs font-medium text-slate-500">×{l.quantity}</span>
               </div>
-              <div className="truncate text-xs text-slate-500">
-                {seller?.name ?? "?"} · {seller?.kind === "npc" ? "🤖 NPC" : "🧑 player"}
-              </div>
+              <div className="truncate text-xs text-slate-400">by {seller?.name ?? "a former neighbor"}</div>
               <Effects itemId={l.itemId} />
             </div>
             {mine ? (
-              <Btn tone="light" onClick={() => act(`/api/listing?id=${l.id}`, undefined, "DELETE")}>
+              <Btn tone="ghost" onClick={() => act(`/api/listing?id=${l.id}`, undefined, "DELETE")}>
                 Cancel
               </Btn>
             ) : (
@@ -164,7 +155,7 @@ function MarketApp({ snapshot, me, act, toast }: Props) {
                 disabled={!me || me.balance < l.price}
                 onClick={async () => {
                   const ok = await act("/api/buy", { listingId: l.id });
-                  if (ok) toast(`Bought ${it.name}. Check your Bag${it.furniture ? " / Buy mode → Stored" : ""}.`, "success");
+                  if (ok) toast(`Bought ${it.name}. Check your Bag${it.furniture ? " or Build → Stored" : ""}.`, "success");
                 }}
               >
                 {l.price} {CURRENCY_SYMBOL}
@@ -196,23 +187,20 @@ function SellApp({ snapshot, me, act, toast }: Props) {
   };
   return (
     <div className="space-y-2">
-      <div className="px-1 text-sm font-bold text-white">Your stuff</div>
-      {sellable.length === 0 && (
-        <Row className="text-sm">Nothing to sell yet. Use 🍳 Make (cook, brew, plan a party…) or put furniture in storage from Buy mode.</Row>
-      )}
+      <div className="px-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">YOUR STUFF</div>
+      {sellable.length === 0 && <Row className="text-sm">Nothing to sell yet. Use 🍳 Make, or put furniture in storage from Build mode.</Row>}
       {sellable.map(([id, q]) => {
         const it = ITEMS[id];
         const c = cheapest(id);
-        const suggested = Math.max(1, (c ?? it.basePrice) - 1);
-        const price = prices[id] ?? suggested;
+        const price = prices[id] ?? Math.max(1, (c ?? it.basePrice) - 1);
         return (
           <Row key={id} className="flex-wrap">
             <span className="text-3xl">{it.emoji}</span>
             <div className="min-w-0 flex-1">
-              <div className="font-bold">
-                {it.name} <span className="text-xs text-slate-400">×{q}</span>
+              <div className="font-bold text-white">
+                {it.name} <span className="text-xs text-slate-500">×{q}</span>
               </div>
-              <div className="text-[11px] text-slate-500">{c !== null ? `Cheapest on market: ${c} ${CURRENCY_SYMBOL}` : `No competition · base ${it.basePrice} ${CURRENCY_SYMBOL}`}</div>
+              <div className="text-[11px] text-slate-400">{c !== null ? `Cheapest listed: ${c} ${CURRENCY_SYMBOL}` : `Suggested ${it.basePrice} ${CURRENCY_SYMBOL}`}</div>
             </div>
             <input
               type="number"
@@ -220,28 +208,28 @@ function SellApp({ snapshot, me, act, toast }: Props) {
               max={500}
               value={price}
               onChange={(e) => setPrices({ ...prices, [id]: Math.max(1, Number(e.target.value) || 1) })}
-              className="w-16 rounded-full border border-slate-200 px-2 py-1 text-center text-sm"
+              className="w-16 rounded-xl border border-white/10 bg-white/5 px-2 py-1 text-center font-mono text-sm text-white"
             />
             <Btn
               onClick={async () => {
                 const ok = await act("/api/listing", { itemId: id, quantity: q, price });
-                if (ok) toast(`Listed ${q}× ${it.name} at ${price} ${CURRENCY_SYMBOL}. NPCs buy the cheapest listing when they need it.`, "success");
+                if (ok) toast(`Listed ${q}× ${it.name} at ${price} ${CURRENCY_SYMBOL}`, "success");
               }}
             >
-              List all
+              List
             </Btn>
           </Row>
         );
       })}
-      <div className="px-1 pt-2 text-sm font-bold text-white">Live listings ({mine.length})</div>
+      <div className="px-1 pt-2 font-mono text-[11px] font-bold tracking-widest text-slate-500">LIVE LISTINGS ({mine.length})</div>
       {mine.map((l) => (
         <Row key={l.id}>
           <span className="text-2xl">{ITEMS[l.itemId].emoji}</span>
           <div className="flex-1 text-sm">
-            <b>{ITEMS[l.itemId].name}</b> ×{l.quantity} @ {l.price} {CURRENCY_SYMBOL}
-            {l.initialQuantity > l.quantity && <span className="text-emerald-600"> · {l.initialQuantity - l.quantity} sold</span>}
+            <b className="text-white">{ITEMS[l.itemId].name}</b> ×{l.quantity} @ {l.price} {CURRENCY_SYMBOL}
+            {l.initialQuantity > l.quantity && <span className="text-[#00ec97]"> · {l.initialQuantity - l.quantity} sold</span>}
           </div>
-          <Btn tone="light" onClick={() => act(`/api/listing?id=${l.id}`, undefined, "DELETE")}>
+          <Btn tone="ghost" onClick={() => act(`/api/listing?id=${l.id}`, undefined, "DELETE")}>
             Cancel
           </Btn>
         </Row>
@@ -256,18 +244,18 @@ function BagApp({ me, character, now, act }: Props) {
   const busy = character?.busy && character.busy.until > now;
   return (
     <div className="space-y-2">
-      {usable.length === 0 && <Row className="text-sm">Your bag is empty. Buy meals, espresso, party invites or spa sessions on the Market.</Row>}
+      {usable.length === 0 && <Row className="text-sm">Empty. Buy meals, espresso, party invites or spa sessions on the Market, or make your own.</Row>}
       {usable.map(([id, q]) => (
         <Row key={id}>
           <span className="text-3xl">{ITEMS[id].emoji}</span>
           <div className="min-w-0 flex-1">
-            <div className="font-bold">
-              {ITEMS[id].name} <span className="text-xs text-slate-400">×{q}</span>
+            <div className="font-bold text-white">
+              {ITEMS[id].name} <span className="text-xs text-slate-500">×{q}</span>
             </div>
             <Effects itemId={id} />
           </div>
           <Btn disabled={!character || !!busy} onClick={() => act("/api/use", { characterId: character!.id, itemId: id })}>
-            Use{character ? ` · ${character.name}` : ""}
+            Use
           </Btn>
         </Row>
       ))}
@@ -281,7 +269,7 @@ function MakeApp({ me, character, now, act, toast }: Props) {
   const make = Object.values(ACTIONS).filter((a) => a.category === "produce");
   return (
     <div className="space-y-2">
-      <p className="px-1 text-xs text-white/85">Make things, then list them in 🏷️ Sell. Each one needs the right furniture at home.</p>
+      <p className="px-1 text-xs text-slate-400">Make things, then list them in 🏷️ Sell. Each one needs the right furniture at home.</p>
       {make.map((a) => {
         const has = !a.requires || me.layout.some((p) => ITEMS[p.itemId]?.furniture?.tag === a.requires);
         const furn = Object.values(ITEMS).find((i) => i.furniture?.tag === a.requires);
@@ -289,8 +277,8 @@ function MakeApp({ me, character, now, act, toast }: Props) {
           <Row key={a.id}>
             <span className="text-3xl">{a.emoji}</span>
             <div className="min-w-0 flex-1">
-              <div className="font-bold">{a.label}</div>
-              <div className="text-[11px] text-slate-500">{has ? a.help : `Needs a ${furn?.name} (Buy mode)`}</div>
+              <div className="font-bold text-white">{a.label}</div>
+              <div className="text-[11px] text-slate-400">{has ? a.help : `Needs a ${furn?.name} (Build mode)`}</div>
             </div>
             <Btn
               disabled={!has || !character || !!busy || me.balance < a.cost}
@@ -314,15 +302,11 @@ function FeedApp({ snapshot, me, now }: Props) {
       {snapshot.activity.slice(0, 50).map((a) => {
         const mine = me && (a.householdId === me.id || a.counterpartyHouseholdId === me.id);
         return (
-          <div key={a.id} className={cn("flex gap-2.5 rounded-2xl px-3 py-2 text-sm", mine ? "bg-amber-100 text-slate-800" : "bg-white/90 text-slate-800")}>
+          <div key={a.id} className={cn("flex gap-2.5 rounded-2xl border px-3 py-2 text-sm", mine ? "border-[#00ec97]/30 bg-[#00ec97]/10" : "border-white/5 bg-white/[0.04]")}>
             <span className="text-xl">{a.emoji}</span>
             <div className="min-w-0 flex-1">
-              <div className="leading-snug">{a.text}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">
-                {timeAgo(a.ts, now)}
-                {a.householdName && ` · ${a.isNpc ? "🤖" : "🧑"} ${a.householdName}`}
-                {a.type === "purchase" && a.isNpc && a.counterpartyIsNpc === false && " · NPC bought from a player"}
-              </div>
+              <div className="leading-snug text-slate-100">{a.text}</div>
+              <div className="mt-0.5 font-mono text-[10px] text-slate-500">{timeAgo(a.ts, now)}</div>
             </div>
           </div>
         );
@@ -332,28 +316,30 @@ function FeedApp({ snapshot, me, now }: Props) {
 }
 
 function NeighborsApp({ snapshot, me, now, onVisit }: Props) {
+  if (snapshot.households.length <= 1) return <Row className="text-sm">You&apos;re the first one here. Share the link with friends so they can move in next door.</Row>;
   return (
     <div className="space-y-2">
       {snapshot.households.map((h) => {
-        const online = h.kind === "npc" || now - h.lastActive < 60_000;
+        const online = now - h.lastActive < 60_000;
         return (
           <Row key={h.id}>
             <span className="relative text-2xl">
-              {h.kind === "npc" ? "🤖" : "🏠"}
-              <span className={cn("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border border-white", online ? "bg-emerald-500" : "bg-slate-300")} />
+              🏠
+              <span className={cn("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border border-slate-900", online ? "bg-[#00ec97]" : "bg-slate-600")} />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="truncate font-bold">
-                {h.name} {h.id === me?.id && <span className="text-xs text-amber-600">(you)</span>}
+              <div className="truncate font-bold text-white">
+                {h.name} {h.id === me?.id && <span className="text-xs text-[#00ec97]">(you)</span>}
               </div>
-              <div className="truncate text-xs text-slate-500">
-                {h.kind === "npc" ? (h.role ? ROLE_LABEL[h.role] : "NPC") : online ? "online now" : `seen ${timeAgo(h.lastActive, now)}`} · {h.balance} {CURRENCY_SYMBOL} ·{" "}
-                {h.activeListings} listings
+              <div className="truncate text-xs text-slate-400">
+                {online ? "online now" : `seen ${timeAgo(h.lastActive, now)}`} · {h.characters.length} Sim{h.characters.length === 1 ? "" : "s"} · {h.activeListings} listings
               </div>
             </div>
-            <Btn tone="dark" onClick={() => onVisit(h.id)}>
-              Visit
-            </Btn>
+            {h.id !== me?.id && (
+              <Btn tone="ghost" onClick={() => onVisit(h.id)}>
+                Visit
+              </Btn>
+            )}
           </Row>
         );
       })}
@@ -361,53 +347,47 @@ function NeighborsApp({ snapshot, me, now, onVisit }: Props) {
   );
 }
 
-function AgentsApp({ snapshot, now, onNpcTick }: Props) {
-  const npcs = snapshot.households.filter((h) => h.kind === "npc");
+function LeadersApp({ snapshot, me }: Props) {
+  const ranked = [...snapshot.households]
+    .map((h) => {
+      const furnitureValue = h.layout.reduce((s, p) => s + (ITEMS[p.itemId]?.furniture?.storePrice ?? 0), 0);
+      return { h, worth: h.balance + furnitureValue };
+    })
+    .sort((a, b) => b.worth - a.worth);
   return (
     <div className="space-y-2">
-      <Row className="flex-col items-stretch">
-        <div className="text-sm">
-          NPC households are autonomous agents with their own NEAR accounts. Every {Math.round(snapshot.config.npcTickMs / 1000)}s they check their needs and buy the cheapest
-          listing that helps, from players too.
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-500">
-            Tick #{snapshot.stats.tickCount} · {timeAgo(snapshot.stats.lastNpcTick, now)} · {snapshot.stats.npcBuysFromPlayers} buys from players
-          </span>
-          <Btn tone="dark" onClick={onNpcTick}>
-            🤖 Run tick
-          </Btn>
-        </div>
+      <Row className="justify-between text-xs text-slate-400">
+        <span>
+          {snapshot.stats.trades} trades · {snapshot.stats.volume} {CURRENCY_SYMBOL} volume
+        </span>
+        <span>net worth = SB + furniture</span>
       </Row>
-      {npcs.flatMap((h) =>
-        h.characters.map((c) => (
-          <Row key={c.id} className="items-start">
-            <span className="text-2xl">{c.avatar}</span>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-bold">
-                {c.name} <span className="font-medium text-slate-400">· {h.name}</span>
-              </div>
-              <div className="text-xs text-violet-700">{c.thought ?? "Thinking…"}</div>
+      {ranked.map(({ h, worth }, i) => (
+        <Row key={h.id} className={h.id === me?.id ? "neon-ring" : undefined}>
+          <span className={cn("w-7 text-center font-mono text-lg font-black", i === 0 ? "text-amber-300" : i === 1 ? "text-slate-300" : i === 2 ? "text-orange-400" : "text-slate-500")}>
+            {i + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-bold text-white">{h.name}</div>
+            <div className="text-xs text-slate-400">
+              {h.layout.length} pieces of furniture · mood {h.mood}
             </div>
-          </Row>
-        )),
-      )}
+          </div>
+          <span className="font-mono font-bold text-[#00ec97]">{worth.toLocaleString()}</span>
+        </Row>
+      ))}
     </div>
   );
 }
 
 function WalletApp({ me, now, act, toast }: Props) {
-  const [events, setEvents] = useState<Array<{ seq: number; ts: number; log: string; event: { event: string; data: Array<Record<string, unknown>> } }>>([]);
+  const [events, setEvents] = useState<Array<{ seq: number; ts: number; log: string; event: { event: string } }>>([]);
   const [near, setNear] = useState<{ near?: string; exists?: boolean; error?: string; explorer?: string } | null>(null);
   useEffect(() => {
     if (!me) return;
     fetch("/api/nep245?method=events&limit=100")
       .then((r) => r.json())
-      .then((d) =>
-        setEvents(
-          (d.events ?? []).filter((e: { log: string }) => e.log.includes(me.accountId)).slice(0, 12),
-        ),
-      )
+      .then((d) => setEvents((d.events ?? []).filter((e: { log: string }) => e.log.includes(me.accountId)).slice(0, 12)))
       .catch(() => {});
     fetch(`/api/near/balance?account_id=${me.accountId}`)
       .then((r) => r.json())
@@ -418,16 +398,15 @@ function WalletApp({ me, now, act, toast }: Props) {
   const cooldown = Math.max(0, (me.lastTopup ?? 0) + 5 * 60_000 - now);
   return (
     <div className="space-y-2">
-      <Row className="flex-col items-start bg-gradient-to-br from-slate-900 to-slate-700 text-white">
-        <div className="text-xs text-slate-300">SimBucks · NEP-245 token</div>
-        <div className="text-3xl font-extrabold">
-          {me.balance.toLocaleString()} {CURRENCY_SYMBOL}
+      <Row className="neon-ring flex-col items-start bg-gradient-to-br from-[#00ec97]/15 to-[#a78bfa]/10">
+        <div className="font-mono text-[10px] tracking-widest text-slate-400">SIMBUCKS · NEP-245</div>
+        <div className="font-mono text-3xl font-black text-white">
+          {me.balance.toLocaleString()} <span className="text-base text-slate-400">{CURRENCY_SYMBOL}</span>
         </div>
-        <div className="text-[11px] break-all text-slate-300">NEAR account {shortAccount(me.accountId)}</div>
-        <div className="text-[11px] text-slate-300">
-          {me.accountSource === "privy" ? "Privy embedded NEAR wallet" : "Implicit NEAR account"} ·{" "}
+        <div className="text-[11px] break-all text-slate-400">
+          {me.accountSource === "privy" ? "Privy embedded NEAR wallet" : "NEAR implicit account"} {shortAccount(me.accountId)} ·{" "}
           {near?.explorer ? (
-            <a href={near.explorer} target="_blank" rel="noreferrer" className="underline">
+            <a href={near.explorer} target="_blank" rel="noreferrer" className="text-[#00ec97] underline">
               {near.error ? "explorer" : near.exists ? `${near.near} NEAR` : "not funded yet"} ↗
             </a>
           ) : (
@@ -435,7 +414,6 @@ function WalletApp({ me, now, act, toast }: Props) {
           )}
         </div>
         <Btn
-          tone="green"
           disabled={cooldown > 0}
           onClick={async () => {
             const r = await act<{ amount: number }>("/api/topup");
@@ -445,18 +423,18 @@ function WalletApp({ me, now, act, toast }: Props) {
           {cooldown > 0 ? `Faucet in ${Math.ceil(cooldown / 60000)}m` : `+100 ${CURRENCY_SYMBOL} testnet faucet`}
         </Btn>
       </Row>
-      <div className="px-1 text-sm font-bold text-white">Token balances</div>
+      <div className="px-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">TOKENS</div>
       <Row className="flex-wrap gap-2">
         {Object.entries({ [CURRENCY]: me.balance, ...me.inventory }).map(([id, q]) => (
-          <span key={id} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold">
+          <span key={id} className="rounded-lg bg-white/10 px-2.5 py-1 font-mono text-xs">
             {ITEMS[id]?.emoji} {id} · {q}
           </span>
         ))}
       </Row>
-      <div className="px-1 text-sm font-bold text-white">Recent NEP-245 events</div>
+      <div className="px-1 font-mono text-[11px] font-bold tracking-widest text-slate-500">NEP-245 EVENTS</div>
       {events.map((e) => (
         <Row key={e.seq} className="flex-col items-start gap-1">
-          <div className="text-xs font-bold">
+          <div className="font-mono text-xs font-bold text-[#00ec97]">
             {e.event.event} · {timeAgo(e.ts, now)}
           </div>
           <code className="block w-full overflow-hidden text-[10px] break-all text-slate-500">{e.log.slice(0, 220)}</code>
@@ -466,39 +444,34 @@ function WalletApp({ me, now, act, toast }: Props) {
   );
 }
 
-function AboutApp({ snapshot, onNpcTick, onSignOut }: Props) {
+function AboutApp({ snapshot, onSignOut }: Props) {
   return (
     <div className="space-y-2 text-sm">
       <Row className="flex-col items-start">
-        <div className="font-bold">How to play</div>
-        <ol className="list-decimal space-y-1 pl-4 text-slate-600">
+        <div className="font-bold text-white">How to play</div>
+        <ol className="list-decimal space-y-1 pl-4 text-slate-300">
           <li>Tap furniture to use it: sleep, shower, eat, cook…</li>
           <li>💼 Jobs → work shifts for SimBucks.</li>
           <li>🍳 Make → cook meals, brew coffee, plan parties.</li>
-          <li>🏷️ Sell → list them. NPC agents and other players buy what they need.</li>
-          <li>Buy furniture to unlock more ways to earn.</li>
-          <li>🗺️ Map → visit neighbors and see what everyone is doing.</li>
+          <li>🏷️ Sell → list them for other players to buy.</li>
+          <li>🛠 Build → furnish your home to unlock more ways to earn.</li>
+          <li>🌆 City → visit neighbors and see what everyone is up to.</li>
         </ol>
       </Row>
       <Row className="flex-col items-start">
-        <div className="font-bold">On NEAR</div>
-        <ul className="list-disc space-y-1 pl-4 text-slate-600">
-          <li>Social login (Privy). A NEAR account is made for you, with no wallet popups.</li>
+        <div className="font-bold text-white">On NEAR</div>
+        <ul className="list-disc space-y-1 pl-4 text-slate-300">
+          <li>Social login (Privy). A NEAR account is created for you, with no wallet popups.</li>
           <li>SimBucks, food, services and furniture are NEP-245 multi-tokens.</li>
-          <li>NPC households are agents with their own NEAR accounts that earn and spend.</li>
+          <li>Every trade is a pair of NEP-245 transfers between real players.</li>
         </ul>
-        <div className="text-xs text-slate-400">
-          auth: {snapshot.config.auth} · state: {snapshot.config.storage} · NEP-245: {snapshot.config.settlement} · {snapshot.config.network}
+        <div className="font-mono text-[10px] text-slate-500">
+          auth {snapshot.config.auth} · state {snapshot.config.storage} · nep245 {snapshot.config.settlement} · {snapshot.config.network}
         </div>
       </Row>
-      <div className="flex gap-2">
-        <Btn tone="dark" onClick={onNpcTick}>
-          🤖 Run NPC tick
-        </Btn>
-        <Btn tone="red" onClick={onSignOut}>
-          Sign out
-        </Btn>
-      </div>
+      <Btn tone="red" onClick={onSignOut}>
+        Sign out
+      </Btn>
     </div>
   );
 }
@@ -512,89 +485,81 @@ const SCREENS: Record<AppId, (p: Props) => ReactNode> = {
   neighbors: NeighborsApp,
   make: MakeApp,
   wallet: WalletApp,
-  agents: AgentsApp,
+  leaders: LeadersApp,
   about: AboutApp,
 };
 
+/** The NEAR Pad: a dark handheld with the game's apps. */
 export function Phone(props: Props) {
   const { app, setApp, now, onClose, character, me, act, toast } = props;
   const clock = gameClock(now);
-  const night = clock.hour < 6 || clock.hour >= 19;
-  const meta = APPS.find((a) => a.id === app) ?? (app === "feed" ? { label: "Messages" } : app === "wallet" ? { label: "Wallet" } : null);
+  const meta = APPS.find((a) => a.id === app);
   const Screen = app !== "home" ? SCREENS[app] : null;
-  const newest = props.snapshot.activity.find((a) => a.type === "purchase");
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-50 flex flex-col items-center justify-end bg-slate-900/40 px-3 pb-3 backdrop-blur-[2px]">
-      <button onClick={onClose} className="mb-3 cursor-pointer self-end rounded-full bg-white px-5 py-2.5 text-lg font-semibold shadow-lg">
-        ✕ Close
-      </button>
-      <div className="phone-in w-full max-w-[400px] rounded-[54px] bg-slate-950 p-3 shadow-2xl">
-        <div
-          className={cn(
-            "relative flex h-[min(72vh,700px)] flex-col overflow-hidden rounded-[44px]",
-            night ? "bg-gradient-to-b from-indigo-950 via-violet-900 to-fuchsia-900" : "bg-gradient-to-b from-indigo-600 via-violet-600 to-orange-400",
-          )}
-        >
-          <div className="flex items-center justify-between px-7 pt-3 text-sm font-semibold text-white">
-            <span>
+    <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/55 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
+      <div className="phone-in relative w-full max-w-[420px] rounded-[30px] border border-white/10 bg-[#0a0c18] p-2 shadow-[0_0_60px_rgba(0,236,151,0.15)]">
+        <div className="relative flex h-[min(80vh,720px)] flex-col overflow-hidden rounded-[24px] bg-[radial-gradient(ellipse_at_top,#1b2148,#0b0d1a_60%)]">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:24px_24px]" />
+          <div className="relative flex items-center gap-2 px-4 pt-3 pb-2">
+            {app === "home" ? (
+              <span className="font-mono text-xs font-bold tracking-[0.25em] text-[#00ec97]">NEAR PAD</span>
+            ) : (
+              <>
+                <button onClick={() => setApp("home")} className="cursor-pointer rounded-lg bg-white/10 px-2.5 py-1 text-sm font-semibold text-slate-200">
+                  ‹
+                </button>
+                <span className="text-lg font-extrabold text-white">{meta?.label}</span>
+              </>
+            )}
+            <span className="ml-auto font-mono text-xs text-slate-400">
               {clock.hour % 12 || 12}:{String(clock.minute).padStart(2, "0")}
-              {clock.hour < 12 ? "AM" : "PM"}
+              {clock.hour < 12 ? "am" : "pm"}
             </span>
-            <span className="h-7 w-28 rounded-full bg-black" />
-            <span>••• 5G ▭</span>
+            <button onClick={onClose} aria-label="Close" className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-white/10 text-slate-300">
+              ✕
+            </button>
           </div>
 
           {app === "home" ? (
-            <div className="flex flex-1 flex-col px-5 pt-4">
-              {newest && (
-                <button
-                  onClick={() => setApp("feed")}
-                  className="flex cursor-pointer items-center gap-3 rounded-3xl bg-black/70 p-3 text-left text-white"
-                >
-                  <span className="flex size-11 items-center justify-center rounded-full bg-rose-600 text-xl">{newest.emoji}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold">Latest trade</span>
-                    <span className="line-clamp-2 text-xs text-white/80">{newest.text}</span>
-                  </span>
-                </button>
+            <div className="relative flex flex-1 flex-col px-4 pb-4">
+              {me && (
+                <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                  <div className="text-xs text-slate-400">{me.name}</div>
+                  <div className="font-mono text-2xl font-black text-white">
+                    {me.balance.toLocaleString()} <span className="text-sm text-[#00ec97]">{CURRENCY_SYMBOL}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {props.snapshot.listings.filter((l) => l.sellerHouseholdId === me.id).length} live listings · {props.snapshot.households.length} households in town
+                  </div>
+                </div>
               )}
-              <div className="mt-5 grid grid-cols-4 gap-x-3 gap-y-4">
+              <div className="grid grid-cols-4 gap-x-2 gap-y-4">
                 {APPS.map((a) => (
                   <button key={a.id} onClick={() => setApp(a.id)} className="flex cursor-pointer flex-col items-center gap-1.5 active:scale-90">
-                    <span className={cn("flex size-[60px] items-center justify-center rounded-[18px] bg-gradient-to-br text-3xl shadow-lg", a.bg)}>{a.emoji}</span>
-                    <span className="text-xs font-medium text-white">{a.label}</span>
+                    <span
+                      className="flex size-14 items-center justify-center rounded-2xl border bg-white/[0.04] text-2xl"
+                      style={{ borderColor: `${a.color}66`, boxShadow: `0 0 16px ${a.color}33, inset 0 0 12px ${a.color}1a`, color: a.color }}
+                    >
+                      {a.emoji}
+                    </span>
+                    <span className="text-[11px] font-medium text-slate-300">{a.label}</span>
                   </button>
                 ))}
               </div>
-              <div className="mt-auto mb-3 grid grid-cols-4 gap-3 rounded-[28px] bg-white/20 p-3 backdrop-blur">
-                {DOCK.map((d) => (
-                  <button
-                    key={d.id}
-                    onClick={async () => {
-                      if (d.id !== "call") return setApp(d.id);
-                      if (!character || !me) return;
-                      const ok = await act("/api/action", { characterId: character.id, action: "socialize" });
-                      if (ok) toast(`📞 ${character.name} is calling a neighbor`, "success");
-                    }}
-                    className={cn("flex aspect-square cursor-pointer items-center justify-center rounded-[18px] bg-gradient-to-br text-3xl shadow active:scale-90", d.bg)}
-                  >
-                    {d.emoji}
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={async () => {
+                  if (!character || !me) return;
+                  const ok = await act("/api/action", { characterId: character.id, action: "socialize" });
+                  if (ok) toast(`📞 ${character.name} is calling a neighbor`, "success");
+                }}
+                className="mt-auto flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#00ec97]/40 bg-[#00ec97]/10 py-3 font-semibold text-[#00ec97]"
+              >
+                📞 Call a neighbor {character ? `as ${character.name}` : ""}
+              </button>
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-                <button onClick={() => setApp("home")} className="cursor-pointer rounded-full bg-white/20 px-3 py-1 text-sm font-semibold text-white">
-                  ‹ Apps
-                </button>
-                <span className="text-lg font-extrabold text-white">{meta?.label}</span>
-                {character && <span className="ml-auto truncate text-xs text-white/80">for {character.name}</span>}
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6">{Screen && <Screen {...props} />}</div>
-            </div>
+            <div className="relative min-h-0 flex-1 overflow-y-auto px-3 pb-6">{Screen && <Screen {...props} />}</div>
           )}
         </div>
       </div>

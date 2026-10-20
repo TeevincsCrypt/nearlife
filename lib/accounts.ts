@@ -6,7 +6,7 @@ const SECRET = process.env.NEARLIFE_ACCOUNT_SECRET || "nearlife-dev-secret-chang
 
 /**
  * Deterministic NEAR implicit account (ed25519) derived from a stable label.
- * Used for NPC agents and as a fallback when a player has no Privy NEAR wallet.
+ * Used as a fallback when a player has no Privy NEAR wallet.
  * The implicit account id is the hex-encoded public key, exactly as NEAR defines it.
  */
 export function deriveImplicitAccount(label: string) {

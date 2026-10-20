@@ -8,7 +8,7 @@
  *     mt_transfer -> mt_transfer(receiver_id, token_id, amount, approval: [owner_id, 0], memo)
  *     mt_mint     -> mt_mint(owner_id, token_ids, amounts)          (contract-owner method)
  *     mt_burn     -> mt_burn(owner_id, token_ids, amounts)          (contract-owner method)
- *   The operator must be the contract owner and an approved account for player/NPC tokens
+ *   The operator must be the contract owner and an approved account for player tokens
  *   (NEP-245 approval management). Players never sign anything: gameplay stays instant and the
  *   chain receives the same transfers asynchronously.
  */

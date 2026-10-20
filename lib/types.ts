@@ -3,8 +3,6 @@ export type Needs = Record<NeedKey, number>;
 
 export const NEED_KEYS: NeedKey[] = ["hunger", "energy", "social", "fun", "hygiene"];
 
-export type NpcRole = "chef" | "barista" | "host" | "artisan" | "commuter";
-
 export interface BusyState {
   action: string;
   label: string;
@@ -40,27 +38,21 @@ export interface Character {
   look?: CharacterLook;
   needs: Needs;
   busy?: BusyState | null;
-  /** Last decision an NPC agent made, shown in the UI. */
-  thought?: string;
 }
 
 export interface Household {
   id: string;
   name: string;
-  kind: "player" | "npc";
   /** NEAR account that holds this household's NEP-245 tokens. */
   accountId: string;
   /** Where the account came from: Privy embedded wallet or server-derived implicit account. */
   accountSource: "privy" | "derived";
   ownerIds: string[];
   ownerNames: string[];
-  role?: NpcRole;
   color: string;
   characters: Character[];
   createdAt: number;
   lastActive: number;
-  /** NPC pricing memory per item id (dynamic pricing). */
-  priceMemory?: Record<string, number>;
   /** Furniture placed in the home (8×8 grid). */
   layout: PlacedFurniture[];
   wallColor?: string;
@@ -97,12 +89,10 @@ export interface ActivityEvent {
   type: ActivityType;
   householdId?: string;
   householdName?: string;
-  isNpc?: boolean;
   text: string;
   emoji: string;
   amount?: number;
   counterpartyHouseholdId?: string;
-  counterpartyIsNpc?: boolean;
   txHash?: string;
 }
 
@@ -132,9 +122,6 @@ export interface GameState {
   version: number;
   createdAt: number;
   lastAdvance: number;
-  lastNpcTick: number;
-  lastForcedTick?: number;
-  tickCount: number;
   households: Record<string, Household>;
   listings: Record<string, Listing>;
   /** NEP-245 ledger: accountId -> tokenId -> amount */
@@ -150,9 +137,6 @@ export interface GameState {
   stats: {
     trades: number;
     volume: number;
-    npcBuysFromPlayers: number;
-    playerBuysFromNpcs: number;
-    playerToPlayer: number;
   };
 }
 
@@ -168,7 +152,7 @@ export interface StateSnapshot {
   households: HouseholdView[];
   listings: Listing[];
   activity: ActivityEvent[];
-  stats: GameState["stats"] & { tickCount: number; lastNpcTick: number };
+  stats: GameState["stats"];
   worldEvent: { id: string; startedAt: number; endsAt: number } | null;
   me: { userId: string; householdId: string | null } | null;
   config: {
@@ -178,6 +162,5 @@ export interface StateSnapshot {
     network: string;
     nep245Contract: string;
     escrowAccount: string;
-    npcTickMs: number;
   };
 }

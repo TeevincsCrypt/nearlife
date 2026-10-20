@@ -3,13 +3,11 @@
  * All functions mutate a GameState in place and are called inside mutateState().
  */
 import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS, WORLD_EVENTS, WORLD_EVENT_MS, type WorldEventDef } from "./catalog";
-import { canPlace, findFreeSpot, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
+import { FLOOR_COLORS, WALL_COLORS, canPlace, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
 import { ESCROW_ACCOUNT, LedgerError, inventoryOf, mt_balance_of, mt_burn, mt_mint, mt_transfer } from "./nep245";
-import { runNpcTick } from "./npc-agent";
 import type { ActivityEvent, Character, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
 import { NEED_KEYS } from "./types";
 
-export const NPC_TICK_MS = Number(process.env.NPC_TICK_MS || 10_000);
 const MAX_CATCHUP_MS = 10 * 60_000;
 /** Player households stop decaying when nobody has looked at them for a while. */
 const PLAYER_IDLE_FREEZE_MS = 15 * 60_000;
@@ -66,7 +64,7 @@ export function owns(state: GameState, hh: Household, itemId: string) {
 }
 
 function who(hh: Household) {
-  return { householdId: hh.id, householdName: hh.name, isNpc: hh.kind === "npc" };
+  return { householdId: hh.id, householdName: hh.name };
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +94,7 @@ export function startAction(state: GameState, hh: Household, c: Character, actio
     mt_burn(state, hh.accountId, CURRENCY, action.cost, `${action.id}:supplies`);
   }
   c.busy = { action: action.id, label: action.verb, startedAt: now, until: now + action.durationSec * 1000, at };
-  if (hh.kind === "player") {
+  {
     hh.lastActive = now;
     if (action.category !== "care") {
       addActivity(state, {
@@ -131,7 +129,7 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
     const factor = (0.5 + 0.5 * (moodOf(c) / 100)) * (currentEvent(state).workPay ?? 1);
     const pay = Math.max(5, Math.round(action.pay * factor));
     mt_mint(state, hh.accountId, CURRENCY, pay, `wage:${c.name}`);
-    if (hh.kind === "player") {
+    {
       addActivity(state, { ...who(hh), ts: now, type: "action", emoji: "💼", amount: pay, text: `${c.name} (${hh.name}) earned ${pay} ${CURRENCY_SYMBOL} at work` });
     }
   }
@@ -141,7 +139,7 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
     const itemId = "itemId" in p ? p.itemId : p.random[Math.floor(Math.random() * p.random.length)];
     mt_mint(state, hh.accountId, itemId, p.qty, `${action.id}:${c.name}`);
     const item = ITEMS[itemId];
-    if (hh.kind === "player") {
+    {
       addActivity(state, {
         ...who(hh),
         ts: now,
@@ -153,24 +151,22 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
   }
 
   if (action.id === "socialize") {
+    // Chat with a Sim from another real player's household, preferring people who are online.
     const others = Object.values(state.households).filter((h) => h.id !== hh.id && h.characters.length);
-    // Prefer chatting across the player/NPC boundary so interactions are visible.
-    const pool = others.filter((h) => h.kind !== hh.kind).length && Math.random() < 0.6 ? others.filter((h) => h.kind !== hh.kind) : others;
+    const online = others.filter((h) => now - h.lastActive < 5 * 60_000);
+    const pool = online.length ? online : others;
     const target = pool[Math.floor(Math.random() * pool.length)];
     if (target) {
       const friend = target.characters[Math.floor(Math.random() * target.characters.length)];
       applyEffects(friend, { social: 12 });
-      if (hh.kind === "player" || target.kind === "player" || Math.random() < 0.25) {
-        addActivity(state, {
-          ...who(hh),
-          ts: now,
-          type: "social",
-          emoji: "💬",
-          counterpartyHouseholdId: target.id,
-          counterpartyIsNpc: target.kind === "npc",
-          text: `${c.name} (${hh.name}) chatted with ${friend.name} (${target.name})`,
-        });
-      }
+      addActivity(state, {
+        ...who(hh),
+        ts: now,
+        type: "social",
+        emoji: "💬",
+        counterpartyHouseholdId: target.id,
+        text: `${c.name} (${hh.name}) called ${friend.name} (${target.name})`,
+      });
     }
   }
 }
@@ -183,8 +179,8 @@ export function useItem(state: GameState, hh: Household, c: Character, itemId: s
   mt_burn(state, hh.accountId, itemId, 1, `use:${c.name}`);
   applyEffects(c, item.effects);
   c.busy = { action: `use:${itemId}`, label: `enjoying ${item.name}`, startedAt: now, until: now + 5000, itemId };
-  if (hh.kind === "player") hh.lastActive = now;
-  if (!silent && hh.kind === "player") {
+  hh.lastActive = now;
+  if (!silent) {
     addActivity(state, { ...who(hh), ts: now, type: "action", emoji: item.emoji, text: `${c.name} (${hh.name}) used ${item.name}` });
   }
 }
@@ -215,7 +211,7 @@ export function createListing(state: GameState, hh: Household, itemId: string, q
     createdAt: now,
   };
   state.listings[listing.id] = listing;
-  if (hh.kind === "player") hh.lastActive = now;
+  hh.lastActive = now;
   addActivity(state, {
     ...who(hh),
     ts: now,
@@ -233,7 +229,7 @@ export function cancelListing(state: GameState, hh: Household, listingId: string
   if (l.sellerHouseholdId !== hh.id) throw new GameError("Not your listing");
   if (l.quantity > 0) mt_transfer(state, ESCROW_ACCOUNT, hh.accountId, l.itemId, l.quantity, `delist:${l.itemId}`);
   delete state.listings[listingId];
-  if (hh.kind === "player") hh.lastActive = now;
+  hh.lastActive = now;
 }
 
 export function buyListing(state: GameState, buyer: Household, listingId: string, now: number) {
@@ -254,24 +250,11 @@ export function buyListing(state: GameState, buyer: Household, listingId: string
 
   l.quantity -= 1;
   l.lastSoldAt = now;
-  const soldOutFast = l.quantity === 0 && now - l.createdAt < 60_000;
   if (l.quantity === 0) delete state.listings[l.id];
 
   state.stats.trades += 1;
   state.stats.volume += l.price;
-  const sellerIsNpc = seller?.kind === "npc";
-  const buyerIsNpc = buyer.kind === "npc";
-  if (buyerIsNpc && seller && !sellerIsNpc) state.stats.npcBuysFromPlayers += 1;
-  if (!buyerIsNpc && sellerIsNpc) state.stats.playerBuysFromNpcs += 1;
-  if (!buyerIsNpc && seller && !sellerIsNpc) state.stats.playerToPlayer += 1;
-
-  // Seller demand signal for NPC dynamic pricing.
-  if (seller && sellerIsNpc && soldOutFast) {
-    const mem = (seller.priceMemory ??= {});
-    mem[l.itemId] = Math.min(Math.round(item.basePrice * 1.6), Math.ceil(l.price * 1.1));
-  }
-
-  if (buyer.kind === "player") buyer.lastActive = now;
+  buyer.lastActive = now;
   return { listing: l, seller, item };
 }
 
@@ -289,10 +272,9 @@ export function logPurchase(
     ...who(buyer),
     ts: now,
     type: "purchase",
-    emoji: buyer.kind === "npc" ? "🤖" : "🛒",
+    emoji: "🛒",
     amount: price,
     counterpartyHouseholdId: seller?.id,
-    counterpartyIsNpc: seller?.kind === "npc",
     text: `${detail ?? buyer.name} bought ${item.emoji} ${item.name} from ${seller?.name ?? "a former neighbor"} for ${price} ${CURRENCY_SYMBOL}`,
   });
 }
@@ -366,12 +348,6 @@ export function sellBackFurniture(state: GameState, hh: Household, uidToSell: st
   return refund;
 }
 
-/** NPCs drop newly bought furniture into the first free spot. */
-export function autoPlace(hh: Household, itemId: string) {
-  const spot = findFreeSpot(hh.layout, itemId);
-  if (spot) hh.layout.push({ uid: furnitureUid(), itemId, ...spot });
-}
-
 export const TOPUP_AMOUNT = 100;
 export const TOPUP_COOLDOWN_MS = 5 * 60_000;
 
@@ -392,9 +368,28 @@ function decay(c: Character, minutes: number, mult: Partial<Needs> = {}) {
   for (const k of NEED_KEYS) c.needs[k] = clamp(c.needs[k] - DECAY_PER_MIN[k] * (mult[k] ?? 1) * minutes);
 }
 
-/** Bring older saved worlds up to date (layouts, looks, events). */
+/** Bring older saved worlds up to date (remove the old NPC households, add layouts and events). */
 function migrate(state: GameState, now: number) {
-  for (const hh of Object.values(state.households)) {
+  const legacy = state.households as Record<string, Household & { kind?: string }>;
+  const npcIds = new Set(Object.values(legacy).filter((h) => h.kind === "npc").map((h) => h.id));
+  if (npcIds.size) {
+    for (const l of Object.values(state.listings)) {
+      if (!npcIds.has(l.sellerHouseholdId)) continue;
+      const escrow = state.balances[ESCROW_ACCOUNT];
+      if (escrow?.[l.itemId]) escrow[l.itemId] = Math.max(0, escrow[l.itemId] - l.quantity);
+      delete state.listings[l.id];
+    }
+    for (const id of npcIds) {
+      delete state.balances[state.households[id].accountId];
+      delete state.households[id];
+    }
+    state.activity = state.activity.filter((a) => !(a.householdId && npcIds.has(a.householdId)) && !(a.counterpartyHouseholdId && npcIds.has(a.counterpartyHouseholdId)));
+    state.activity = state.activity.filter((a) => a.id !== "genesis");
+  }
+  for (const [i, hh] of Object.values(state.households).entries()) {
+    // Older worlds used light pastel rooms; move them onto the night-market palette.
+    if (!hh.wallColor || !WALL_COLORS.includes(hh.wallColor)) hh.wallColor = WALL_COLORS[i % WALL_COLORS.length];
+    if (!hh.floorColor || !FLOOR_COLORS.includes(hh.floorColor)) hh.floorColor = FLOOR_COLORS[i % FLOOR_COLORS.length];
     if (!hh.layout) {
       hh.layout = starterLayout();
       for (const p of hh.layout) mt_mint(state, hh.accountId, p.itemId, 1, "home-furniture");
@@ -420,45 +415,21 @@ function rotateWorldEvent(state: GameState, now: number) {
   addActivity(state, { ts: now, type: "system", emoji: next.emoji, text: `${next.title}: ${next.description}` });
 }
 
-/** Fast-forward NPC needs (used by the manual "NPC tick" button so judges don't have to wait). */
-export function fastForwardNpcs(state: GameState, minutes: number, now: number) {
-  for (const hh of Object.values(state.households)) {
-    if (hh.kind !== "npc") continue;
-    for (const c of hh.characters) {
-      decay(c, minutes);
-      if (c.busy) completeAction(state, hh, c, now);
-    }
-  }
-}
-
-/** Advance the world to `now`: decay needs, finish actions, run NPC agents if due. */
-export function advance(state: GameState, now: number, opts: { forceNpcTick?: boolean } = {}) {
+/** Advance the world to `now`: decay needs, finish actions, rotate neighborhood events. */
+export function advance(state: GameState, now: number) {
   migrate(state, now);
   rotateWorldEvent(state, now);
   const mult = currentEvent(state).decay;
   const dt = Math.min(Math.max(0, now - state.lastAdvance), MAX_CATCHUP_MS);
   const minutes = dt / 60_000;
   for (const hh of Object.values(state.households)) {
-    const frozen = hh.kind === "player" && now - hh.lastActive > PLAYER_IDLE_FREEZE_MS;
+    const frozen = now - hh.lastActive > PLAYER_IDLE_FREEZE_MS;
     for (const c of hh.characters) {
       if (!frozen) decay(c, minutes, mult);
       if (c.busy && c.busy.until <= now) completeAction(state, hh, c, now);
     }
   }
   state.lastAdvance = now;
-
-  let ticked = false;
-  if (opts.forceNpcTick || now - state.lastNpcTick >= NPC_TICK_MS) {
-    npcTick(state, now);
-    ticked = true;
-  }
-  return { ticked };
-}
-
-export function npcTick(state: GameState, now: number) {
-  runNpcTick(state, now);
-  state.lastNpcTick = now;
-  state.tickCount += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -487,13 +458,13 @@ export function snapshot(
 ): StateSnapshot {
   const households = Object.values(state.households)
     .map((h) => householdView(state, h))
-    .sort((a, b) => (a.kind === b.kind ? b.lastActive - a.lastActive : a.kind === "player" ? -1 : 1));
+    .sort((a, b) => b.lastActive - a.lastActive);
   return {
     now,
     households,
     listings: Object.values(state.listings).sort((a, b) => b.createdAt - a.createdAt),
     activity: state.activity.slice(0, 60),
-    stats: { ...state.stats, tickCount: state.tickCount, lastNpcTick: state.lastNpcTick },
+    stats: { trades: state.stats.trades, volume: state.stats.volume },
     worldEvent: state.worldEvent ?? null,
     me: userId ? { userId, householdId: state.players[userId] ?? null } : null,
     config,

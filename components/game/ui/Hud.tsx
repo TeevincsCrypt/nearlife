@@ -1,21 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { CURRENCY_SYMBOL, WORLD_EVENTS, gameClock } from "@/lib/catalog";
-import type { ActivityEvent, StateSnapshot } from "@/lib/types";
-import { Pill } from "./Sheet";
+import type { StateSnapshot } from "@/lib/types";
 
-function moodFace(mood: number) {
-  if (mood >= 65) return { face: "☺", color: "#22c55e" };
-  if (mood >= 35) return { face: "😐", color: "#eab308" };
-  return { face: "☹", color: "#ef4444" };
-}
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+/** Single status strip across the top, with a scrolling live ticker under it. */
 export function Hud({
   snapshot,
   now,
   balance,
-  mood,
   onTopUp,
   onTicker,
   showTicker = true,
@@ -23,83 +18,79 @@ export function Hud({
   snapshot: StateSnapshot;
   now: number;
   balance: number | null;
-  mood: number | null;
   onTopUp: () => void;
   onTicker: () => void;
   showTicker?: boolean;
 }) {
   const clock = gameClock(now);
   const h12 = clock.hour % 12 === 0 ? 12 : clock.hour % 12;
-  const ampm = clock.hour < 12 ? "AM" : "PM";
   const isDay = clock.hour >= 6 && clock.hour < 19;
   const ev = WORLD_EVENTS.find((e) => e.id === snapshot.worldEvent?.id) ?? WORLD_EVENTS[0];
   const [evOpen, setEvOpen] = useState(false);
-
-  // Ticker: rotate through recent notable events.
-  const notable = snapshot.activity.filter((a) => ["purchase", "listing", "join", "system", "price"].includes(a.type)).slice(0, 6);
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setIdx((i) => i + 1), 5000);
-    return () => clearInterval(t);
-  }, []);
-  const tick: ActivityEvent | undefined = notable.length ? notable[idx % notable.length] : undefined;
-  const face = mood !== null ? moodFace(mood) : null;
+  const items = snapshot.activity.filter((a) => ["purchase", "listing", "join", "system", "production"].includes(a.type)).slice(0, 8);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-      <div className="flex w-full max-w-xl items-center justify-between">
-        <Pill>
-          <span className="text-lg">{isDay ? "☀️" : "🌙"}</span>
-          <span className="text-lg font-bold tabular-nums">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex flex-col items-center gap-1.5 px-2.5 pt-[max(0.6rem,env(safe-area-inset-top))]">
+      <div className="glass pointer-events-auto flex w-full max-w-xl items-center gap-2 rounded-2xl px-3 py-2 shadow-xl">
+        <div className="flex items-baseline gap-1.5">
+          <span className={isDay ? "text-amber-300" : "text-indigo-300"}>{isDay ? "☀" : "☾"}</span>
+          <span className="font-mono text-lg font-bold tabular-nums text-white">
             {h12}:{String(clock.minute).padStart(2, "0")}
           </span>
-          <span className="text-xs font-semibold text-slate-300">{ampm}</span>
-          {face && (
-            <span className="flex size-7 items-center justify-center rounded-full border-2 text-sm font-bold" style={{ borderColor: face.color, color: face.color }}>
-              {face.face}
-            </span>
-          )}
-        </Pill>
+          <span className="text-[11px] font-semibold text-slate-400">
+            {clock.hour < 12 ? "AM" : "PM"} · {DAYS[clock.day]}
+          </span>
+        </div>
+        <button
+          onClick={() => setEvOpen((o) => !o)}
+          className="mx-auto flex min-w-0 cursor-pointer items-center gap-1.5 rounded-xl bg-white/5 px-2.5 py-1 text-sm font-semibold text-slate-100"
+        >
+          <span>{ev.emoji}</span>
+          <span className="truncate">{ev.title}</span>
+          <span className={`text-[10px] text-slate-400 transition ${evOpen ? "rotate-180" : ""}`}>▼</span>
+        </button>
         {balance !== null && (
-          <Pill className="pr-1.5">
-            <span className="text-lg font-extrabold tabular-nums">
-              {balance.toLocaleString()} <span className="text-xs font-semibold text-slate-300">{CURRENCY_SYMBOL}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-lg font-bold tabular-nums neon-text">
+              {balance.toLocaleString()}
+              <span className="ml-0.5 text-[10px] font-semibold text-slate-400">{CURRENCY_SYMBOL}</span>
             </span>
             <button
               onClick={onTopUp}
               aria-label="Top up"
-              className="pointer-events-auto flex size-9 cursor-pointer items-center justify-center rounded-full bg-emerald-500 text-2xl leading-none font-bold text-white active:scale-90"
+              className="btn-neon flex size-8 cursor-pointer items-center justify-center rounded-xl text-xl leading-none font-black active:scale-90"
             >
               +
             </button>
-          </Pill>
+          </div>
         )}
       </div>
 
-      <Pill onClick={() => setEvOpen((o) => !o)} className="max-w-[90%]">
-        <span>{ev.emoji}</span>
-        <span className="font-semibold">{ev.title}</span>
-        <span className={`text-xs transition ${evOpen ? "rotate-180" : ""}`}>⌄</span>
-      </Pill>
       {evOpen && (
-        <div className="pointer-events-auto w-full max-w-md rounded-2xl bg-slate-900/90 px-4 py-3 text-sm text-slate-100 shadow-lg">
-          {ev.description}
-          {snapshot.worldEvent && <div className="mt-1 text-xs text-slate-400">Changes in {Math.max(0, Math.ceil((snapshot.worldEvent.endsAt - now) / 60000))} min</div>}
+        <div className="glass pointer-events-auto w-full max-w-xl rounded-2xl px-4 py-3 text-sm">
+          <div className="font-semibold text-white">
+            {ev.emoji} {ev.title}
+          </div>
+          <div className="text-slate-300">{ev.description}</div>
+          {snapshot.worldEvent && <div className="mt-1 text-xs text-slate-500">Changes in {Math.max(0, Math.ceil((snapshot.worldEvent.endsAt - now) / 60000))} min</div>}
         </div>
       )}
 
-      {tick && !evOpen && showTicker && (
-        <button
-          key={tick.id}
-          onClick={onTicker}
-          className="ticker-in pointer-events-auto flex w-full max-w-xl cursor-pointer items-center gap-3 rounded-[28px] bg-white/95 px-4 py-3 text-left shadow-xl"
-        >
-          <span className="text-3xl">{tick.emoji}</span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-slate-800">
-              {tick.householdName ?? "Neighborhood"} {tick.isNpc ? "· NPC agent" : tick.householdName ? "· player" : ""}
+      {showTicker && !evOpen && items.length > 0 && (
+        <button onClick={onTicker} className="glass pointer-events-auto flex w-full max-w-xl cursor-pointer items-center overflow-hidden rounded-xl py-1.5 text-left text-xs">
+          <span className="ml-2.5 shrink-0 rounded-md bg-[#00ec97]/15 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#00ec97]">LIVE</span>
+          <span className="relative min-w-0 flex-1 overflow-hidden">
+            <span className="marquee inline-flex whitespace-nowrap">
+              {[0, 1].map((k) => (
+                <span key={k} className="inline-flex">
+                  {items.map((a) => (
+                    <span key={`${k}${a.id}`} className="px-4 text-slate-200">
+                      {a.emoji} {a.text}
+                    </span>
+                  ))}
+                </span>
+              ))}
             </span>
-            <span className="line-clamp-2 text-sm font-medium text-emerald-700">{tick.text}</span>
           </span>
         </button>
       )}

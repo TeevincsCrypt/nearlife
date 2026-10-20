@@ -1,5 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "crons": [{ "path": "/api/npc-tick", "schedule": "0 12 * * *" }]
+  "framework": "nextjs"
 }

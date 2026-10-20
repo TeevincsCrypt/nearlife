@@ -1,6 +1,6 @@
 /** Home layout helpers shared by the server (validation) and the 3D client (placement preview). */
 import { ITEMS, ROOM_SIZE, type FurnitureTag } from "./catalog";
-import type { NpcRole, PlacedFurniture } from "./types";
+import type { PlacedFurniture } from "./types";
 
 export function footprint(itemId: string, rot: number): [number, number] {
   const size = ITEMS[itemId]?.furniture?.size ?? [1, 1];
@@ -69,25 +69,5 @@ export function starterLayout() {
   ]);
 }
 
-const BASE: Array<[string, number, number, number?]> = [
-  ["fridge", 3, 0],
-  ["stove", 4, 0],
-  ["shower", 7, 0],
-  ["tv", 0, 5],
-  ["sofa", 1, 6],
-  ["plant", 7, 7],
-];
-
-export function npcLayout(role: NpcRole) {
-  const extra: Record<NpcRole, Array<[string, number, number, number?]>> = {
-    chef: [["mattress", 0, 0], ["dining_table", 3, 3], ["plastic_chair", 5, 3]],
-    barista: [["mattress", 0, 0], ["coffee_machine", 5, 0], ["armchair", 4, 4], ["bookshelf", 7, 3]],
-    host: [["comfy_bed", 0, 0], ["speaker", 5, 0], ["game_table", 4, 4], ["plastic_chair", 5, 4], ["lamp", 2, 0]],
-    artisan: [["mattress", 0, 0], ["workbench", 5, 4], ["spa_table", 2, 3], ["standing_fan", 7, 5]],
-    commuter: [["comfy_bed", 0, 0], ["dining_table", 3, 3], ["armchair", 6, 3], ["toilet", 6, 0]],
-  };
-  return build([...extra[role], ...BASE]);
-}
-
-export const WALL_COLORS = ["#d9c27a", "#c7d2fe", "#fbcfe8", "#bbf7d0", "#fde68a", "#e2e8f0"];
-export const FLOOR_COLORS = ["#c8a27a", "#b08968", "#d6d3d1", "#a3b18a", "#cbd5e1"];
+export const WALL_COLORS = ["#3a3f63", "#4b3a63", "#2f5552", "#5b3a4a", "#3a4f6b", "#4a4458"];
+export const FLOOR_COLORS = ["#8a6a50", "#7a5f48", "#6b7280", "#5f6b7a", "#9a7b5f"];
