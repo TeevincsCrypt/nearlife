@@ -10,6 +10,7 @@ import { cn, shortAccount, timeAgo } from "@/lib/utils";
 import { txUrl } from "@/lib/near-real";
 import { REAL_IDS, RealPanelFor } from "./RealMode";
 import { Portrait } from "./Portrait";
+import { BrandIcon, LOGOS } from "./BrandIcon";
 import { CloseButton } from "./Sheet";
 
 export type EcoId =
@@ -455,9 +456,7 @@ function EcoHeader({ id }: { id: EcoId | "wallet" }) {
   const e = ECO[id];
   return (
     <div className="mb-2 flex items-center gap-3 rounded-2xl border p-3" style={{ borderColor: `${e.color}55`, background: `${e.color}12` }}>
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl" style={{ background: `${e.color}25`, color: e.color }}>
-        {e.emoji}
-      </span>
+      <BrandIcon id={id} emoji={e.emoji} size={48} radius={16} className="border-[3px] border-[#0d1b5e] text-2xl" />
       <div className="min-w-0 flex-1">
         <div className="font-bold text-white">{e.name}</div>
         <div className="text-xs leading-snug text-slate-300">{e.blurb}</div>
@@ -817,9 +816,7 @@ function PlacesApp({ now, snapshot, onPlace }: Props) {
         const here = snapshot.households.reduce((n, h) => n + h.characters.filter((c) => c.busy?.place === p.id && c.busy.until > now).length, 0);
         return (
           <button key={p.id} onClick={() => onPlace(p.id)} className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.05] p-3 text-left">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ background: `${p.color}22`, color: p.color }}>
-              {p.emoji}
-            </span>
+            <BrandIcon id={p.id} emoji={p.emoji} size={40} className="border-2 border-[#0d1b5e] text-xl" />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-bold text-white">{p.name}</span>
               <span className="block truncate text-xs text-slate-400">{p.actions.map((a) => a.label).join(" · ")}</span>
@@ -895,14 +892,24 @@ const SCREENS: Record<AppId, (p: Props) => ReactNode> = {
   meme: makeEcoApp("meme"),
 };
 
-function AppIcon({ emoji, label, color, onClick, featured }: { emoji: string; label: string; color: string; onClick: () => void; featured?: boolean }) {
+function AppIcon({ emoji, label, color, onClick, featured, logo }: { emoji: string; label: string; color: string; onClick: () => void; featured?: boolean; logo?: string }) {
+  const src = logo ? LOGOS[logo] : undefined;
   return (
     <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-1 active:scale-90">
       <span
         className="relative flex size-[52px] items-center justify-center rounded-2xl border-[3px] border-[#0d1b5e] text-2xl font-black text-white"
-        style={{ background: `linear-gradient(180deg, ${color}, ${color}cc 55%, ${color}99)`, boxShadow: "inset 0 3px 0 rgba(255,255,255,0.45), inset 0 -3px 0 rgba(13,27,94,0.25), 0 4px 0 #0d1b5e" }}
+        style={
+          src
+            ? { background: "#fff", boxShadow: "0 4px 0 #0d1b5e" }
+            : { background: `linear-gradient(180deg, ${color}, ${color}cc 55%, ${color}99)`, boxShadow: "inset 0 3px 0 rgba(255,255,255,0.45), inset 0 -3px 0 rgba(13,27,94,0.25), 0 4px 0 #0d1b5e" }
+        }
       >
-        <span className="drop-shadow-[0_2px_0_rgba(13,27,94,0.55)]">{emoji}</span>
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" draggable={false} className="size-full rounded-[13px] object-contain" />
+        ) : (
+          <span className="drop-shadow-[0_2px_0_rgba(13,27,94,0.55)]">{emoji}</span>
+        )}
         {featured && (
           <span className="font-display absolute -top-2 -right-2 rounded-md border-2 border-[#7a3d00] bg-[#ffd23f] px-1 text-[9px] leading-tight text-[#7a3d00]">REAL</span>
         )}
@@ -974,7 +981,7 @@ export function Phone(props: Props) {
               </div>
               <div className="grid grid-cols-5 gap-x-1.5 gap-y-4">
                 {ECO_ORDER.map((id) => (
-                  <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={REAL_IDS.has(id)} />
+                  <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={REAL_IDS.has(id)} logo={id} />
                 ))}
               </div>
               <button

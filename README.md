@@ -273,3 +273,7 @@ LID=$(curl -s -XPOST localhost:3000/api/listing -H "$A" -H "$J" -d '{"itemId":"m
 curl -s -XPOST localhost:3000/api/buy -H "$B" -H "$J" -d "{\"listingId\":\"$LID\"}" > /dev/null
 curl -s 'localhost:3000/api/activity?type=purchase&limit=5' | jq -r '.activity[].text'
 ```
+
+## Logos
+
+Project logos in `public/logos/` belong to their respective owners and are used only to identify the real projects the in-game places and apps refer to. NEARLIFE is not affiliated with any of them. Sources: the projects' own public GitHub repos (NEAR wallet-selector, NearSocial/viewer, Nearblocks, near-daos/sputnik-dao-ui, out-layer/dashboard, defuse-protocol/defuse-frontend, electric-capital/crypto-ecosystems), token metadata in ref-finance/ref-sdk, and the DefiLlama/icons repo.

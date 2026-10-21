@@ -5,6 +5,7 @@ import { CURRENCY_SYMBOL } from "@/lib/catalog";
 import { PLACE_BY_ID, TRAVEL, type TravelMode } from "@/lib/places";
 import type { Character, HouseholdView } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { BrandIcon } from "./BrandIcon";
 import { Portrait } from "./Portrait";
 import { RealPanelFor } from "./RealMode";
 import { Sheet } from "./Sheet";
@@ -53,9 +54,7 @@ export function PlaceSheet({
     <Sheet
       title={place.name}
       icon={
-        <span className="flex size-11 items-center justify-center rounded-2xl text-2xl" style={{ background: `${place.color}22`, color: place.color }}>
-          {place.emoji}
-        </span>
+        <BrandIcon id={place.id} emoji={place.emoji} size={44} radius={14} className="text-2xl" />
       }
       subtitle={place.description}
       onClose={onClose}

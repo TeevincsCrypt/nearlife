@@ -4,6 +4,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 import { Anchor } from "./anchors";
+import { LogoSignpost } from "./LogoBoard";
 import { PLACES, type BuildingStyle, type PlaceDef, type TravelMode } from "@/lib/places";
 import type { ActivityEvent, HouseholdView } from "@/lib/types";
 
@@ -461,6 +462,7 @@ function PlaceBuilding({ place }: { place: PlaceDef }) {
   return (
     <group position={[place.pos[0], 0, place.pos[1]]}>
       {styles[place.style]}
+      <LogoSignpost id={place.id} position={[2.1, 0, 2.3]} />
       <Anchor id={`pl:${place.id}`} offsetY={Math.max(2.4, place.height + 1.6)} scaleRef={40} />
     </group>
   );

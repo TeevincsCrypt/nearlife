@@ -1,5 +1,6 @@
 "use client";
 
+import { BrandIcon } from "./BrandIcon";
 import { CURRENCY_SYMBOL } from "@/lib/catalog";
 import type { PlaceDef } from "@/lib/places";
 import type { Character, HouseholdView } from "@/lib/types";
@@ -91,9 +92,7 @@ export function InsidePanel({
   return (
     <div className="glass-strong pointer-events-auto absolute inset-x-2 top-[calc(max(0.6rem,env(safe-area-inset-top))+7rem)] z-30 mx-auto max-w-xl rounded-2xl p-2.5">
       <div className="flex items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border-[3px] border-[#0d1b5e] text-lg" style={{ background: place.color }}>
-          {place.emoji}
-        </span>
+        <BrandIcon id={place.id} emoji={place.emoji} size={36} radius={12} className="border-[3px] border-[#0d1b5e] text-lg" />
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-black tracking-[0.2em] text-[#ffd23f]">
             INSIDE

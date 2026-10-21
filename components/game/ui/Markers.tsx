@@ -1,5 +1,6 @@
 "use client";
 
+import { LOGOS } from "./BrandIcon";
 import { ACTIONS, ITEMS } from "@/lib/catalog";
 import { PLACES, PLACE_BY_ID, TRAVEL } from "@/lib/places";
 import type { HouseholdView } from "@/lib/types";
@@ -42,15 +43,17 @@ function Pin({
   );
 }
 
-function PlacePin({ emoji, label, color, real, onClick }: { emoji: string; label: string; color: string; real?: boolean; onClick: () => void }) {
+function PlacePin({ id, emoji, label, color, real, onClick }: { id: string; emoji: string; label: string; color: string; real?: boolean; onClick: () => void }) {
+  const logo = LOGOS[id];
   return (
     <button onClick={onClick} className="pointer-events-auto flex cursor-pointer flex-col items-center" style={{ WebkitTapHighlightColor: "transparent" }}>
       <span
         className="font-display flex items-center gap-1.5 rounded-xl border-[3px] border-[#0d1b5e] py-0.5 pr-2 pl-0.5 text-xs whitespace-nowrap text-white shadow-[0_3px_0_#0d1b5e] [-webkit-text-stroke:0.75px_#0d1b5e] [paint-order:stroke_fill]"
         style={{ background: "linear-gradient(180deg,#3d6cf2,#2a4ed0)" }}
       >
-        <span className="flex size-6 items-center justify-center rounded-lg border-2 border-[#0d1b5e] text-sm" style={{ background: color }}>
-          {emoji}
+        <span className="flex size-6 items-center justify-center overflow-hidden rounded-lg border-2 border-[#0d1b5e] text-sm" style={{ background: logo ? "#fff" : color }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {logo ? <img src={logo} alt="" draggable={false} className="size-full object-contain" /> : emoji}
         </span>
         {label}
         {real && <span className="rounded border border-[#7a3d00] bg-[#ffd23f] px-1 text-[8px] text-[#7a3d00] [-webkit-text-stroke:0]">REAL</span>}
@@ -91,7 +94,7 @@ export function CityMarkers({
       </AnchoredLabel>
       {PLACES.map((p) => (
         <AnchoredLabel key={p.id} id={`pl:${p.id}`}>
-          <PlacePin emoji={p.emoji} label={p.short} color={p.color} real={REAL_IDS.has(p.id)} onClick={() => onPlace(p.id)} />
+          <PlacePin id={p.id} emoji={p.emoji} label={p.short} color={p.color} real={REAL_IDS.has(p.id)} onClick={() => onPlace(p.id)} />
         </AnchoredLabel>
       ))}
       {trips.map((t) => (

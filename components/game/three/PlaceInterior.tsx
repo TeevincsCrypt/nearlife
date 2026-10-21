@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoPlaque } from "./LogoBoard";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
@@ -455,6 +456,7 @@ export function PlaceInterior({
       <Glow p={[0, 0.03, D / 2]} s={[W, 0.03, 0.05]} c={place.color} i={1} />
       <Glow p={[W / 2, 0.03, 0]} s={[0.05, 0.03, D]} c={place.color} i={1} />
       <NameSign place={place} />
+      <LogoPlaque id={place.id} size={1.2} position={[-3.9, 2.35, -D / 2 + 0.06]} />
       <Decor place={place} />
 
       {/* activity stations */}
