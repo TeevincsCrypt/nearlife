@@ -39,7 +39,7 @@ function Swatches({ colors, value, onChange }: { colors: string[]; value: string
 export function CreateHousehold({ onCreate }: { onCreate: (body: unknown) => Promise<void> }) {
   const auth = useAuth();
   const [name, setName] = useState(`${auth.displayName || "My"}'s Place`);
-  const [chars, setChars] = useState<Draft[]>([newDraft(0)]);
+  const [chars, setChars] = useState<Draft[]>(() => [{ ...newDraft(0), ...(auth.displayName ? { name: auth.displayName.slice(0, 16) } : {}) }]);
   const [sel, setSel] = useState(0);
   const [busy, setBusy] = useState(false);
   const [invite, setInvite] = useState("");
