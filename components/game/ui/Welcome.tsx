@@ -103,6 +103,9 @@ export function Welcome() {
             </>
           )}
           <p className="mt-3 text-center text-[11px] font-bold text-[#cfe0ff]">No wallet popups. A NEAR account is created for you.</p>
+          <a href="/reveal" className="mt-2 block text-center text-xs font-black tracking-wider text-[#ffd23f] underline-offset-2 hover:underline">
+            ▶ WATCH THE REVEAL
+          </a>
         </div>
       </div>
     </div>

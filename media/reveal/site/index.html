@@ -1,0 +1,346 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+@font-face { font-family: "Lilita"; src: url(fonts/lilita.woff2) format("woff2"); }
+@font-face { font-family: "Nunito"; src: url(fonts/nunito.woff2) format("woff2"); font-weight: 200 1000; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: #6fb7ff; }
+#stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: "Nunito", sans-serif; }
+#sky { position: absolute; inset: 0; background: linear-gradient(180deg, #2f7cf0 0%, #5aa6ff 38%, #a8dbff 72%, #d8f0ff 100%); }
+#warm { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,170,90,0) 0%, rgba(255,190,120,0.55) 70%, rgba(255,220,160,0.7) 100%); opacity: 0; }
+#sun { position: absolute; width: 520px; height: 520px; left: 60px; top: -60px; border-radius: 50%;
+  background: radial-gradient(circle, #fffbe0 0 13%, rgba(255,240,160,0.95) 15%, rgba(255,230,140,0.45) 30%, rgba(255,230,140,0) 62%); }
+.cloud { position: absolute; }
+#hills { position: absolute; left: -60px; bottom: 0; width: 2040px; height: 420px; }
+.layer { position: absolute; inset: 0; }
+.h1 { position: absolute; left: 0; right: 0; text-align: center; font-family: "Lilita", sans-serif; font-size: 84px; line-height: 1.05; color: #fff;
+  -webkit-text-stroke: 9px #0d1b5e; paint-order: stroke fill; text-shadow: 0 8px 0 #0d1b5e; letter-spacing: 0.5px; white-space: nowrap; }
+.h1 .w { display: inline-block; margin: 0 10px; will-change: transform, opacity; }
+.h1 .k { color: #ffd23f; }
+.card { position: absolute; left: 0; top: 0; border-radius: 30px; overflow: hidden; background: #fff; border: 7px solid #fff;
+  box-shadow: 0 0 0 5px #0d1b5e, 0 16px 0 5px #0d1b5e, 0 40px 70px rgba(13,27,94,0.35); transform-origin: 50% 50%; }
+.card img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 22px; }
+.chip { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 14px; padding: 8px 22px 8px 8px; border-radius: 22px;
+  border: 5px solid #0d1b5e; background: linear-gradient(180deg, #4f7cf6, #2a4ed0); box-shadow: 0 7px 0 #0d1b5e, 0 18px 30px rgba(13,27,94,0.3);
+  font-family: "Lilita", sans-serif; font-size: 34px; color: #fff; -webkit-text-stroke: 5px #0d1b5e; paint-order: stroke fill; white-space: nowrap; transform-origin: 50% 50%; }
+.chip .ic { width: 58px; height: 58px; border-radius: 15px; border: 4px solid #0d1b5e; background: #fff; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; font-size: 34px; -webkit-text-stroke: 0; }
+.chip .ic img { width: 100%; height: 100%; object-fit: contain; }
+.chip.gold { background: linear-gradient(180deg, #ffe46b, #f5a50b); border-color: #7a3d00; box-shadow: 0 7px 0 #7a3d00, 0 18px 30px rgba(122,61,0,0.3); -webkit-text-stroke-color: #7a3d00; }
+.chip.green { background: linear-gradient(180deg, #5ef0a0, #20b866); }
+.cursor { position: absolute; left: 0; top: 0; }
+.cursor .tag { position: absolute; left: 34px; top: 34px; padding: 6px 18px; border-radius: 14px; border: 4px solid #0d1b5e; font-family: "Lilita"; font-size: 28px; color: #fff;
+  -webkit-text-stroke: 4px #0d1b5e; paint-order: stroke fill; white-space: nowrap; box-shadow: 0 5px 0 #0d1b5e; }
+.qcard { position: absolute; left: 0; top: 0; width: 560px; height: 340px; border-radius: 34px; border: 6px dashed rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.22); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 30px 60px rgba(13,27,94,0.18); }
+.qcard .q { font-family: "Lilita"; font-size: 190px; line-height: 1; color: #ffd23f; -webkit-text-stroke: 10px #0d1b5e; paint-order: stroke fill; text-shadow: 0 10px 0 #0d1b5e; }
+.qcard .l { font-family: "Lilita"; font-size: 30px; color: #fff; -webkit-text-stroke: 5px #0d1b5e; paint-order: stroke fill; letter-spacing: 4px; margin-top: 8px; }
+.tile { position: absolute; left: 0; top: 0; width: 330px; height: 380px; border-radius: 34px; border: 6px solid #0d1b5e; background: linear-gradient(180deg, #ffffff, #e6eeff);
+  box-shadow: 0 14px 0 #0d1b5e, 0 40px 60px rgba(13,27,94,0.3); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; }
+.tile .e { font-size: 150px; line-height: 1; }
+.tile .t { font-family: "Lilita"; font-size: 38px; color: #2a4ed0; }
+.tile .lock { position: absolute; right: -26px; top: -26px; width: 92px; height: 92px; border-radius: 50%; background: linear-gradient(180deg, #ff8a98, #e23a52);
+  border: 6px solid #0d1b5e; display: flex; align-items: center; justify-content: center; font-size: 46px; box-shadow: 0 6px 0 #0d1b5e; }
+.badge { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; transform-origin: 50% 50%; }
+.badge .box { border-radius: 56px; border: 9px solid #0d1b5e; background: linear-gradient(180deg, #5fd3ff, #2f5be8); padding: 18px 64px 30px;
+  box-shadow: inset 0 7px 0 rgba(255,255,255,0.5), 0 14px 0 #0d1b5e, 0 50px 80px rgba(13,27,94,0.35); }
+.badge .n { font-family: "Lilita"; font-size: 170px; line-height: 0.9; text-align: center; color: #ffd23f; -webkit-text-stroke: 10px #0d1b5e; paint-order: stroke fill; text-shadow: 0 12px 0 #0d1b5e; }
+.badge .lf { font-family: "Lilita"; font-size: 140px; line-height: 0.9; text-align: center; color: #fff; -webkit-text-stroke: 10px #0d1b5e; paint-order: stroke fill; text-shadow: 0 12px 0 #0d1b5e; margin-top: -4px; }
+.ribbon { position: absolute; left: 0; top: 0; font-family: "Lilita"; font-size: 40px; color: #fff; -webkit-text-stroke: 6px #7a3d00; paint-order: stroke fill;
+  padding: 10px 36px; border-radius: 20px; border: 6px solid #7a3d00; background: linear-gradient(180deg, #ffe46b, #f59e0b); box-shadow: 0 8px 0 #7a3d00; white-space: nowrap; transform-origin: 50% 50%; }
+.real { position: absolute; left: 0; top: 0; width: 760px; border-radius: 40px; border: 7px solid #0d1b5e; background: linear-gradient(180deg, #3d6cf2, #2443c9);
+  box-shadow: 0 14px 0 #0d1b5e, 0 50px 80px rgba(13,27,94,0.35); padding: 34px 40px 38px; color: #fff; transform-origin: 50% 50%; }
+.real .tag { display: inline-block; font-family: "Lilita"; font-size: 26px; color: #7a3d00; background: #ffd23f; border: 4px solid #7a3d00; border-radius: 12px; padding: 2px 14px; letter-spacing: 2px; }
+.real .ttl { font-family: "Lilita"; font-size: 54px; margin-top: 18px; -webkit-text-stroke: 7px #0d1b5e; paint-order: stroke fill; }
+.real .row { margin-top: 18px; display: flex; align-items: center; gap: 18px; border-radius: 24px; border: 4px solid #0d1b5e; background: rgba(13,27,94,0.35); padding: 16px 20px; font-weight: 800; font-size: 30px; }
+.real .row img { width: 60px; height: 60px; border-radius: 14px; background: #fff; border: 3px solid #0d1b5e; object-fit: contain; }
+.real .btn { margin-top: 26px; height: 96px; border-radius: 28px; border: 6px solid #7a3d00; background: linear-gradient(180deg, #ffe46b, #f5a50b); box-shadow: 0 9px 0 #7a3d00;
+  display: flex; align-items: center; justify-content: center; font-family: "Lilita"; font-size: 46px; color: #fff; -webkit-text-stroke: 6px #7a3d00; paint-order: stroke fill; }
+.real .btn.ok { background: linear-gradient(180deg, #6ff5ab, #1fb865); border-color: #0b5a33; box-shadow: 0 9px 0 #0b5a33; -webkit-text-stroke-color: #0b5a33; }
+.word { position: absolute; left: 0; top: 0; font-family: "Lilita"; font-size: 330px; line-height: 1; white-space: nowrap; -webkit-text-stroke: 16px #0d1b5e; paint-order: stroke fill; text-shadow: 0 20px 0 #0d1b5e; }
+.word .a { color: #ffd23f; } .word .b { color: #fff; }
+.pill { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 16px; padding: 14px 18px 14px 36px; border-radius: 999px; background: #fff; border: 6px solid #0d1b5e;
+  box-shadow: 0 9px 0 #0d1b5e; font-family: "Lilita"; font-size: 46px; color: #0d1b5e; white-space: nowrap; transform-origin: 50% 50%; }
+.pill .go { width: 64px; height: 64px; border-radius: 50%; background: #2a4ed0; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 40px; }
+.spark { position: absolute; left: 0; top: 0; width: 26px; height: 26px; }
+.conf { position: absolute; left: 0; top: 0; width: 18px; height: 28px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="sky"></div>
+  <div id="warm"></div>
+  <div id="sun"></div>
+  <div id="clouds"></div>
+  <svg id="hills" viewBox="0 0 2040 420" preserveAspectRatio="none">
+    <g id="hfar"><path d="M0 170 Q 260 60 520 150 T 1040 140 T 1560 120 T 2040 150 V420 H0Z" fill="#9edb8f"/></g>
+    <g id="hmid"><path d="M0 250 Q 340 140 700 230 T 1400 220 T 2040 230 V420 H0Z" fill="#6cc46a"/></g>
+    <g id="hfront"><path d="M0 330 Q 420 250 900 320 T 2040 300 V420 H0Z" fill="#4fae55"/></g>
+  </svg>
+  <div id="fx"></div>
+</div>
+<script>
+const W = 1920, H = 1080;
+const stage = document.getElementById("stage");
+const fx = document.getElementById("fx");
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, p) => a + (b - a) * p;
+const easeOut = (p) => 1 - Math.pow(1 - clamp(p), 3);
+const easeInOut = (p) => { p = clamp(p); return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; };
+const spring = (p) => (p <= 0 ? 0 : 1 - Math.exp(-6.5 * p) * Math.cos(10.5 * p));
+const mk = (html, parent = fx) => { const d = document.createElement("div"); d.innerHTML = html.trim(); const e = d.firstChild; parent.appendChild(e); return e; };
+
+// ---------- scenery ----------
+const cloudSvg = (w, o) => `<svg class="cloud" width="${w}" height="${w * 0.45}" viewBox="0 0 200 90" style="opacity:${o}"><g fill="#fff">
+  <ellipse cx="60" cy="58" rx="52" ry="30"/><ellipse cx="105" cy="40" rx="48" ry="36"/><ellipse cx="148" cy="60" rx="46" ry="26"/><rect x="20" y="58" width="170" height="30" rx="15"/></g></svg>`;
+const clouds = [
+  [260, 0.95, 180, 0.9, 6], [340, 0.9, 1250, 0.6, 9], [200, 0.8, 700, 1.4, 12], [300, 0.85, 1650, 1.2, 7], [180, 0.7, 980, 2.2, 14], [240, 0.75, 120, 2.6, 10], [220, 0.8, 1450, 3.2, 11],
+].map(([w, o, x, y, sp]) => ({ el: mk(cloudSvg(w, o), document.getElementById("clouds")), w, x, y: 80 + y * 90, sp }));
+const trees = document.createElementNS("http://www.w3.org/2000/svg", "g");
+[[140, 205], [420, 175], [610, 196], [880, 160], [1180, 172], [1330, 150], [1610, 168], [1880, 180]].forEach(([x, y], i) => {
+  trees.innerHTML += `<g transform="translate(${x} ${y})"><rect x="-4" y="0" width="8" height="18" fill="#3b7a3e"/><circle cx="0" cy="-6" r="${14 + (i % 3) * 3}" fill="#3f9a48"/></g>`;
+});
+document.getElementById("hfar").appendChild(trees);
+const trees2 = document.createElementNS("http://www.w3.org/2000/svg", "g");
+[[90, 280], [520, 236], [760, 252], [1260, 238], [1500, 222], [1960, 238]].forEach(([x, y], i) => {
+  trees2.innerHTML += `<g transform="translate(${x} ${y})"><rect x="-6" y="0" width="12" height="26" fill="#2f6b34"/><circle cx="0" cy="-10" r="${22 + (i % 2) * 6}" fill="#35913f"/></g>`;
+});
+document.getElementById("hmid").appendChild(trees2);
+
+// ---------- timeline items ----------
+const items = [];
+function add(item) { item.el.style.opacity = 0; items.push(item); return item; }
+
+function headline(t0, t1, html, y = 120) {
+  const el = mk(`<div class="h1" style="top:${y}px"></div>`);
+  // html: words; wrap gold keywords in [..]
+  const parts = html.match(/\[[^\]]+\]|[^\s\[\]]+/g);
+  el.innerHTML = parts.map((p) => p.startsWith("[") ? p.slice(1, -1).split(" ").map((w) => `<span class="w k">${w}</span>`).join("") : `<span class="w">${p}</span>`).join("");
+  const words = [...el.querySelectorAll(".w")];
+  return add({ el, t0, t1, update(t) {
+    const out = clamp((t - (t1 - 0.35)) / 0.35);
+    el.style.opacity = 1;
+    words.forEach((w, i) => {
+      const p = clamp((t - t0 - i * 0.07) / 0.45);
+      const e = easeOut(p);
+      w.style.opacity = e * (1 - out);
+      w.style.transform = `translateY(${(1 - e) * 40 - out * 30}px) scale(${0.9 + 0.1 * e})`;
+      w.style.filter = `blur(${(1 - e) * 8 + out * 8}px)`;
+    });
+  } });
+}
+
+// keyframed box: kf = [[time, {x,y,w,r,s}], ...] centre coords
+function sampleKf(kf, t) {
+  if (t <= kf[0][0]) return kf[0][1];
+  for (let i = 0; i < kf.length - 1; i++) {
+    const [ta, a] = kf[i], [tb, b] = kf[i + 1];
+    if (t <= tb) { const p = easeInOut((t - ta) / (tb - ta)); const o = {}; for (const k in a) o[k] = lerp(a[k], b[k] ?? a[k], p); return o; }
+  }
+  return kf[kf.length - 1][1];
+}
+function boxItem(el, t0, t1, kf, opts = {}) {
+  const { ratio = 16 / 9, from = { dy: 80, s: 0.8 }, exit = "fade", bob = 6, phase = Math.random() * 6, setW = true } = opts;
+  return add({ el, t0, t1, update(t) {
+    const st = sampleKf(kf, t);
+    const ein = clamp((t - t0) / 0.7);
+    const sp = spring((t - t0) / 0.9);
+    const out = clamp((t - (t1 - 0.4)) / 0.4);
+    const w = st.w;
+    if (setW) { el.style.width = w + "px"; if (ratio) el.style.height = w / ratio + "px"; }
+    const ew = el.offsetWidth, eh = el.offsetHeight;
+    const by = Math.sin(t * 1.3 + phase) * bob;
+    let dy = (1 - easeOut(ein)) * (from.dy ?? 0), dx = (1 - easeOut(ein)) * (from.dx ?? 0);
+    let s = (st.s ?? 1) * lerp(from.s ?? 1, 1, sp);
+    let op = clamp(ein * 2.2) * (1 - out);
+    if (exit === "drop") { dy += easeOut(out) * 160; op = clamp(ein * 2.2) * (1 - clamp(out * 1.4)); }
+    if (exit === "up") { dy -= easeOut(out) * 80; s *= 1 - out * 0.08; }
+    el.style.opacity = op;
+    el.style.transform = `translate(${st.x - ew / 2 + dx}px, ${st.y - eh / 2 + dy + by}px) rotate(${st.r ?? 0}deg) scale(${s})`;
+    opts.extra?.(t, el);
+  } });
+}
+function card(t0, t1, src, kf, opts = {}) {
+  const el = mk(`<div class="card"><img src="img/${src}"></div>`);
+  return boxItem(el, t0, t1, kf, opts);
+}
+function chip(t0, t1, x, y, label, icon, cls = "", opts = {}) {
+  const ic = icon ? (icon.includes(".") ? `<span class="ic"><img src="img/${icon}"></span>` : `<span class="ic">${icon}</span>`) : "";
+  const el = mk(`<div class="chip ${cls}">${ic}<span>${label}</span></div>`);
+  return boxItem(el, t0, t1, [[0, { x, y, w: 0 }]], { setW: false, from: { s: 0.2, dy: 30 }, bob: 5, ...opts });
+}
+const CURSOR = (c) => `<svg width="46" height="46" viewBox="0 0 24 24"><path d="M3 2 L20 11 L12 13 L9 21 Z" fill="${c}" stroke="#0d1b5e" stroke-width="2" stroke-linejoin="round"/></svg>`;
+function cursor(t0, t1, label, color, path) {
+  const el = mk(`<div class="cursor">${CURSOR(color)}<div class="tag" style="background:${color}">${label}</div></div>`);
+  return add({ el, t0, t1, update(t) {
+    const ein = clamp((t - t0) / 0.4), out = clamp((t - (t1 - 0.35)) / 0.35);
+    const st = sampleKf(path, t);
+    el.style.opacity = ein * (1 - out);
+    el.style.transform = `translate(${st.x}px, ${st.y}px) scale(${lerp(0.6, 1, easeOut(ein))})`;
+  } });
+}
+function sparkles(t0, cx, cy, n = 14, spread = 420, colors = ["#ffd23f", "#ffffff", "#5fd3ff"]) {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + i * 0.3, d = spread * (0.6 + ((i * 37) % 10) / 25), c = colors[i % colors.length];
+    const el = mk(`<svg class="spark" viewBox="0 0 24 24"><path d="M12 0 L14.5 9.5 L24 12 L14.5 14.5 L12 24 L9.5 14.5 L0 12 L9.5 9.5Z" fill="${c}" stroke="#0d1b5e" stroke-width="1.2"/></svg>`);
+    add({ el, t0, t1: t0 + 1.6, update(t) {
+      const p = clamp((t - t0) / 1.3);
+      el.style.opacity = p > 0 ? Math.sin(p * Math.PI) : 0;
+      const e = easeOut(p);
+      el.style.transform = `translate(${cx + Math.cos(a) * d * e - 13}px, ${cy + Math.sin(a) * d * e - 13}px) rotate(${p * 180}deg) scale(${0.6 + Math.sin(p * Math.PI) * 1.4})`;
+    } });
+  }
+}
+function confetti(t0, cx, cy, n = 40) {
+  const cols = ["#ffd23f", "#3ddc84", "#5fd3ff", "#ff7aa8", "#ffffff", "#b28cff"];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (((i * 53) % 100) / 100 - 0.5) * 2.4, v = 700 + ((i * 29) % 10) * 70;
+    const el = mk(`<div class="conf" style="background:${cols[i % cols.length]};border:3px solid #0d1b5e"></div>`);
+    add({ el, t0, t1: t0 + 2.4, update(t) {
+      const lt = t - t0; if (lt < 0) { el.style.opacity = 0; return; }
+      const x = cx + Math.cos(a) * v * lt, y = cy + Math.sin(a) * v * lt + 900 * lt * lt;
+      el.style.opacity = clamp(1 - (lt - 1.6) / 0.6);
+      el.style.transform = `translate(${x}px, ${y}px) rotate(${lt * (300 + i * 20)}deg)`;
+    } });
+  }
+}
+
+// ================= SCENES =================
+// S1/S2: life sims you've played, nothing was yours
+headline(0.15, 3.3, "You've played [life sims.]");
+headline(3.35, 6.9, "But nothing you earned was [ever yours.]");
+const tiles = [["🏠", "Build a house", 560, 600, -7], ["🛋️", "Buy furniture", 960, 570, 0], ["💼", "Get a job", 1360, 600, 7]].map(([e, t, x, y, r], i) =>
+  boxItem(mk(`<div class="tile"><div class="e">${e}</div><div class="t">${t}</div><div class="lock">🔒</div></div>`), 0.35 + i * 0.22, 6.95,
+    [[0, { x, y, w: 330, r }]], { setW: false, exit: "drop", from: { dy: 120, s: 0.6 },
+      extra(t, el) {
+        const g = clamp((t - (4.3 + i * 0.25)) / 0.5);
+        el.querySelectorAll(".e,.t").forEach((c) => (c.style.filter = `grayscale(${g}) opacity(${1 - g * 0.35})`));
+        el.style.background = g > 0 ? `linear-gradient(180deg, #ffffff, ${g > 0.5 ? "#d9dde6" : "#e6eeff"})` : "";
+        const lk = el.querySelector(".lock"); const sp = spring((t - (4.5 + i * 0.25)) / 0.8);
+        lk.style.opacity = t > 4.5 + i * 0.25 ? 1 : 0; lk.style.transform = `scale(${sp}) rotate(${(1 - sp) * -40}deg)`;
+      } }));
+
+// S3: what if it was?
+headline(6.95, 9.65, "So... what if [it was?]");
+boxItem(mk(`<div class="qcard"><div class="q">?</div><div class="l">YOUR LIFE</div></div>`), 7.1, 9.75, [[0, { x: 960, y: 590, w: 560 }]], { setW: false, from: { s: 0.5, dy: 40 }, bob: 10 });
+
+// S4: Meet NEARLIFE
+headline(9.7, 14.0, "Meet [NEARLIFE.]");
+const badge = mk(`<div class="badge"><div class="box"><div class="n">NEAR</div><div class="lf">LIFE</div></div></div>`);
+boxItem(badge, 9.85, 14.05, [[0, { x: 960, y: 560, w: 0 }], [12.2, { x: 960, y: 560, w: 0 }], [13.6, { x: 960, y: 540, w: 0, s: 0.96 }]], { setW: false, from: { s: 0.1, dy: 0 }, bob: 7, exit: "up" });
+boxItem(mk(`<div class="ribbon">A SHARED LIFE SIM ON NEAR</div>`), 10.55, 14.05, [[0, { x: 960, y: 800, w: 0 }]], { setW: false, from: { s: 0.2, dy: 20 }, bob: 7, exit: "up" });
+sparkles(10.0, 960, 560, 18, 520);
+chip(11.6, 14.0, 520, 470, "Shared world", "🌍", "", { from: { s: 0.2, dx: 80 } });
+chip(11.85, 14.0, 1420, 470, "Real economy", "near.png", "", { from: { s: 0.2, dx: -80 } });
+chip(12.1, 14.0, 470, 950, "Your own NEAR account", "🔑", "gold");
+chip(12.35, 14.0, 1460, 950, "Free to play", "🎮", "green");
+
+// S5: Move in, make it yours
+headline(14.05, 17.6, "Move in. Make it [yours.]");
+card(14.15, 17.65, "home.jpg", [[14.15, { x: 960, y: 610, w: 1240, r: 0 }], [15.3, { x: 960, y: 610, w: 1240, r: 0 }], [16.0, { x: 640, y: 630, w: 900, r: -4 }]], { from: { dy: 140, s: 0.85 } });
+card(15.55, 17.65, "build.jpg", [[0, { x: 1290, y: 610, w: 900, r: 4 }]], { from: { dx: 300, s: 0.85 } });
+chip(16.1, 17.6, 330, 900, "Needs & moods", "❤️");
+chip(16.35, 17.6, 1580, 400, "Furnish your flat", "🛋️", "gold");
+cursor(14.6, 17.6, "Kemi", "#ff7aa8", [[14.6, { x: 1400, y: 820 }], [15.4, { x: 1100, y: 640 }], [16.4, { x: 1400, y: 760 }], [17.6, { x: 1250, y: 700 }]]);
+
+// S6: a city full of real crypto places
+headline(17.65, 22.45, "A city full of [real crypto places.]");
+card(17.75, 22.5, "city.jpg", [[17.75, { x: 960, y: 640, w: 1220, r: 0 }], [22.5, { x: 960, y: 630, w: 1260, r: 0 }]], { from: { dy: 160, s: 0.8 } });
+[["Ref Finance", "ref.svg", 300, 360], ["Burrow", "burrow.png", 1620, 360], ["Rhea Finance", "rhea.png", 250, 560], ["OutLayer", "outlayer.png", 1680, 560],
+ ["NEAR Intents", "intents.png", 290, 760], ["Aurora", "aurora.png", 1640, 760], ["Sputnik DAO", "sputnik.svg", 520, 960], ["meme.cooking", "meme.png", 1400, 960],
+ ["HERE Wallet", "here.png", 960, 985]].forEach(([l, ic, x, y], i) => chip(18.6 + i * 0.27, 22.45, x, y, l, ic));
+chip(21.0, 22.45, 960, 300, "🚗 Car · 🚆 Train · ✈️ Plane", null, "gold", { from: { s: 0.3, dy: -20 } });
+
+// S7: inside, do real things
+headline(22.5, 28.45, "Walk inside. [Do real things.]");
+card(22.6, 28.5, "inside.jpg", [[22.6, { x: 960, y: 640, w: 1240, r: 0 }], [28.5, { x: 960, y: 630, w: 1290, r: 0 }]], { from: { dy: 160, s: 0.8 } });
+chip(23.85, 28.4, 400, 480, "Swap tokens", "ref.svg", "", { from: { s: 0.2, dx: 60 } });
+chip(25.15, 28.4, 1520, 600, "Vote in a DAO", "sputnik.svg", "", { from: { s: 0.2, dx: -60 } });
+chip(26.45, 28.4, 470, 860, "Run an AI agent", "outlayer.png", "gold", { from: { s: 0.2, dx: 60 } });
+cursor(23.0, 28.4, "Kemi", "#ff7aa8", [[23.0, { x: 1300, y: 900 }], [24.1, { x: 560, y: 500 }], [25.2, { x: 1380, y: 620 }], [26.4, { x: 640, y: 880 }], [28.4, { x: 800, y: 760 }]]);
+
+// S8: trade with neighbors
+headline(28.5, 32.45, "Trade with [real neighbors.]");
+card(28.6, 32.5, "leaders.jpg", [[0, { x: 760, y: 650, w: 440, r: -4 }]], { ratio: 640 / 1130, from: { dy: 180, s: 0.8 } });
+card(28.85, 32.5, "goout.jpg", [[0, { x: 1180, y: 660, w: 440, r: 4 }]], { ratio: 640 / 1130, from: { dy: 180, s: 0.8 } });
+cursor(29.0, 32.4, "Tolu", "#3ddc84", [[29.0, { x: 1500, y: 860 }], [30.3, { x: 1160, y: 560 }], [32.4, { x: 1280, y: 700 }]]);
+cursor(29.3, 32.4, "Ada", "#b28cff", [[29.3, { x: 380, y: 420 }], [30.6, { x: 760, y: 600 }], [32.4, { x: 640, y: 520 }]]);
+chip(30.0, 32.4, 360, 820, "Sold: Comfy Bed +60 SB", "🛏️", "green", { from: { s: 0.2, dx: 60 } });
+chip(30.6, 32.4, 1560, 420, "#1 on the leaderboard", "🏆", "gold", { from: { s: 0.2, dx: -60 } });
+
+// S9: NEAR Pad
+headline(32.5, 36.85, "The whole ecosystem, [in your pocket.]");
+card(32.6, 36.9, "pad.jpg", [[0, { x: 960, y: 640, w: 440, r: 0 }]], { ratio: 640 / 1130, from: { dy: 220, s: 0.7 } });
+["near.png", "outlayer.png", "ref.svg", "burrow.png", "rhea.png", "jumbo.png", "nsocial.svg", "sputnik.svg", "meteor.png", "here.png", "intents.png", "aurora.png", "meme.png", "explorer.svg"].forEach((ic, i, arr) => {
+  const a = -Math.PI / 2 + (i / arr.length) * Math.PI * 2;
+  
+  const el = mk(`<div class="chip" style="padding:8px"><span class="ic" style="width:84px;height:84px"><img src="img/${ic}"></span></div>`);
+  const t0 = 33.3 + i * 0.12;
+  add({ el, t0, t1: 36.85, update(t) {
+    const p = easeOut(clamp((t - t0) / 0.7)), sp = spring((t - t0) / 0.9), out = clamp((t - 36.5) / 0.35);
+    const orb = (t - t0) * 0.08;
+    const x = lerp(960, 960 + Math.cos(a + orb) * 640, p), y = lerp(640, 640 + Math.sin(a + orb) * 350, p);
+    el.style.opacity = clamp(p * 3) * (1 - out);
+    el.style.transform = `translate(${x - 54}px, ${y - 54 + Math.sin(t * 2 + i) * 6}px) scale(${lerp(0.2, 1, sp)})`;
+  } });
+});
+
+// S10: when you want it real
+headline(36.9, 42.45, "Want it real? [It's real.]");
+const real = mk(`<div class="real"><span class="tag">REAL · NEAR MAINNET</span><div class="ttl">Swap NEAR for USDC</div>
+  <div class="row"><img src="img/intents.png"><span>0.1 NEAR → USDC, routed by NEAR Intents</span></div>
+  <div class="row"><img src="img/near.png"><span>Signed by your embedded wallet</span></div>
+  <div class="btn">Sign &amp; send</div></div>`);
+const rbtn = real.querySelector(".btn");
+boxItem(real, 37.05, 42.5, [[0, { x: 960, y: 620, w: 0 }]], { setW: false, from: { dy: 160, s: 0.75 }, bob: 5,
+  extra(t) {
+    const press = t > 39.2 && t < 39.5;
+    rbtn.style.transform = press ? "translateY(7px)" : "none";
+    rbtn.style.boxShadow = press ? "0 2px 0 #7a3d00" : "";
+    const ok = t >= 39.5; rbtn.classList.toggle("ok", ok); rbtn.innerHTML = ok ? "✓ Confirmed on NEAR" : "Sign &amp; send";
+  } });
+cursor(37.6, 42.4, "You", "#ffd23f", [[37.6, { x: 1500, y: 960 }], [38.9, { x: 1010, y: 860 }], [39.2, { x: 1000, y: 868 }], [42.4, { x: 1080, y: 930 }]]);
+confetti(39.5, 960, 840, 46);
+sparkles(39.5, 960, 840, 14, 380);
+chip(39.9, 42.4, 360, 430, "tx 8Fq3…kW2", "near.png", "green", { from: { s: 0.2, dx: 60 } });
+chip(40.3, 42.4, 1570, 520, "No wallet popups", "🔐", "", { from: { s: 0.2, dx: -60 } });
+chip(40.7, 42.4, 380, 820, "NEP-245 items", "🎒", "gold", { from: { s: 0.2, dx: 60 } });
+
+// S11: end card
+headline(42.5, 48.5, "Play it [right now.]", 170);
+const pill = mk(`<div class="pill">Free in your browser <span class="go">→</span></div>`);
+boxItem(pill, 43.0, 48.5, [[0, { x: 960, y: 330, w: 0 }]], { setW: false, from: { s: 0.3, dy: 10 }, bob: 4 });
+const word = mk(`<div class="word"><span class="a">NEAR</span><span class="b">LIFE</span></div>`);
+add({ el: word, t0: 43.2, t1: 48.5, update(t) {
+  const p = easeOut(clamp((t - 43.2) / 1.2)), sp = spring((t - 43.2) / 1.3);
+  word.style.opacity = clamp(p * 2.5);
+  const ww = word.offsetWidth, wh = word.offsetHeight;
+  word.style.transform = `translate(${960 - ww / 2}px, ${lerp(1100, 610, sp) - wh / 2}px) scale(${lerp(0.9, 1, p)})`;
+} });
+sparkles(44.0, 960, 640, 16, 760);
+chip(44.6, 48.5, 960, 925, "Built on NEAR", "near.png", "", { from: { s: 0.2, dy: 30 } });
+
+// ---------- render ----------
+const sky = document.getElementById("sky"), warm = document.getElementById("warm"), sun = document.getElementById("sun");
+const hfar = document.getElementById("hfar"), hmid = document.getElementById("hmid"), hfront = document.getElementById("hfront");
+window.render = (t) => {
+  clouds.forEach((c) => { let x = ((c.x + t * c.sp + 400) % (W + 800)) - 400; c.el.style.transform = `translate(${x}px, ${c.y}px)`; });
+  hfar.setAttribute("transform", `translate(${-t * 0.4} 0)`);
+  hmid.setAttribute("transform", `translate(${-t * 0.8} 0)`);
+  hfront.setAttribute("transform", `translate(${-t * 1.15} 0)`);
+  const end = clamp((t - 42.4) / 2.5);
+  warm.style.opacity = end * 0.55;
+  sun.style.transform = `translate(${end * 120}px, ${end * 70}px) scale(${1 + Math.sin(t * 1.6) * 0.03 + end * 0.25})`;
+  for (const it of items) {
+    const vis = t >= it.t0 - 0.05 && t <= it.t1 + 0.05;
+    if (!vis) { if (it.el.style.opacity !== "0") it.el.style.opacity = 0; continue; }
+    it.update(t);
+  }
+};
+window.ready = Promise.all([document.fonts.ready, ...[...document.images].map((i) => i.complete ? 1 : new Promise((r) => (i.onload = i.onerror = r)))]);
+window.DURATION = 48.5;
+</script>
+</body>
+</html>
