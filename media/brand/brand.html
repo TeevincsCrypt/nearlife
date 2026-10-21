@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+@font-face { font-family: "Lilita"; src: url(../reveal/site/fonts/lilita.woff2) format("woff2"); }
+@font-face { font-family: "Nunito"; src: url(../reveal/site/fonts/nunito.woff2) format("woff2"); font-weight: 200 1000; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { overflow: hidden; }
+.sky { position: absolute; inset: 0; background: linear-gradient(180deg, #2f7cf0 0%, #5aa6ff 40%, #a8dbff 76%, #d8f0ff 100%); }
+.rays { position: absolute; left: 50%; top: 50%; width: 260%; height: 260%; transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.22) 0deg 7deg, transparent 7deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, black 0%, transparent 60%); }
+.glow { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,0.75), rgba(255,255,255,0) 65%); }
+.sun { position: absolute; border-radius: 50%;
+  background: radial-gradient(circle, #fffbe0 0 13%, rgba(255,240,160,0.95) 15%, rgba(255,230,140,0.45) 30%, rgba(255,230,140,0) 62%); }
+.cloud { position: absolute; }
+.hills { position: absolute; left: 0; bottom: 0; width: 100%; }
+.badge { position: absolute; display: flex; flex-direction: column; align-items: center; }
+.box { border-radius: 56px; border: 10px solid #0d1b5e; background: linear-gradient(180deg, #5fd3ff, #2f5be8); padding: 22px 70px 34px;
+  box-shadow: inset 0 8px 0 rgba(255,255,255,0.5), 0 16px 0 #0d1b5e, 0 40px 70px rgba(13,27,94,0.35); }
+.n { font-family: "Lilita"; font-size: 190px; line-height: 0.9; text-align: center; color: #ffd23f; -webkit-text-stroke: 12px #0d1b5e; paint-order: stroke fill; text-shadow: 0 13px 0 #0d1b5e; }
+.lf { font-family: "Lilita"; font-size: 158px; line-height: 0.9; text-align: center; color: #fff; -webkit-text-stroke: 12px #0d1b5e; paint-order: stroke fill; text-shadow: 0 13px 0 #0d1b5e; margin-top: -2px; }
+.word { position: absolute; font-family: "Lilita"; line-height: 1; white-space: nowrap; -webkit-text-stroke: 12px #0d1b5e; paint-order: stroke fill; text-shadow: 0 12px 0 #0d1b5e; }
+.word .a { color: #ffd23f; } .word .b { color: #fff; }
+.ribbon { position: absolute; font-family: "Lilita"; color: #fff; -webkit-text-stroke: 6px #7a3d00; paint-order: stroke fill; white-space: nowrap;
+  border-radius: 18px; border: 6px solid #7a3d00; background: linear-gradient(180deg, #ffe46b, #f59e0b); box-shadow: 0 8px 0 #7a3d00; }
+.card { position: absolute; border-radius: 22px; overflow: hidden; background: #fff; border: 6px solid #fff;
+  box-shadow: 0 0 0 4px #0d1b5e, 0 12px 0 4px #0d1b5e, 0 30px 50px rgba(13,27,94,0.3); }
+.card img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 16px; }
+.chip { position: absolute; display: flex; align-items: center; gap: 10px; padding: 6px 16px 6px 6px; border-radius: 18px; border: 4px solid #0d1b5e;
+  background: linear-gradient(180deg, #4f7cf6, #2a4ed0); box-shadow: 0 6px 0 #0d1b5e; font-family: "Lilita"; font-size: 26px; color: #fff; -webkit-text-stroke: 4px #0d1b5e; paint-order: stroke fill; white-space: nowrap; }
+.chip .ic { width: 44px; height: 44px; border-radius: 12px; border: 3px solid #0d1b5e; background: #fff; overflow: hidden; }
+.chip .ic img { width: 100%; height: 100%; object-fit: contain; }
+</style>
+</head>
+<body>
+<div id="root" style="position:relative;overflow:hidden"></div>
+<script>
+const mode = new URLSearchParams(location.search).get("mode");
+const root = document.getElementById("root");
+const cloud = (x, y, w, o = 0.95) => `<svg class="cloud" style="left:${x}px;top:${y}px;width:${w}px;opacity:${o}" viewBox="0 0 200 90"><g fill="#fff">
+  <ellipse cx="60" cy="58" rx="52" ry="30"/><ellipse cx="105" cy="40" rx="48" ry="36"/><ellipse cx="148" cy="60" rx="46" ry="26"/><rect x="20" y="58" width="170" height="30" rx="15"/></g></svg>`;
+const hills = (w, h, trees = true) => `<svg class="hills" style="height:${h}px" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+  <path d="M0 ${h * 0.42} Q ${w * 0.13} ${h * 0.14} ${w * 0.26} ${h * 0.36} T ${w * 0.52} ${h * 0.33} T ${w * 0.78} ${h * 0.29} T ${w} ${h * 0.36} V${h} H0Z" fill="#9edb8f"/>
+  <path d="M0 ${h * 0.6} Q ${w * 0.17} ${h * 0.34} ${w * 0.35} ${h * 0.55} T ${w * 0.7} ${h * 0.52} T ${w} ${h * 0.55} V${h} H0Z" fill="#6cc46a"/>
+  <path d="M0 ${h * 0.8} Q ${w * 0.21} ${h * 0.6} ${w * 0.45} ${h * 0.76} T ${w} ${h * 0.72} V${h} H0Z" fill="#4fae55"/>
+  ${trees ? [0.06, 0.2, 0.33, 0.47, 0.6, 0.74, 0.88, 0.97].map((f, i) => `<g transform="translate(${w * f} ${h * (0.36 + (i % 3) * 0.05)})"><rect x="-4" y="0" width="8" height="${h * 0.07}" fill="#2f6b34"/><circle cx="0" cy="-4" r="${h * (0.05 + (i % 2) * 0.015)}" fill="#3f9a48"/></g>`).join("") : ""}
+</svg>`;
+
+if (mode === "avatar") {
+  const S = 1000;
+  root.style.width = root.style.height = S + "px";
+  root.innerHTML = `<div class="sky"></div><div class="rays"></div>
+    <div class="glow" style="left:150px;top:150px;width:700px;height:700px"></div>
+    ${cloud(-40, 120, 260, 0.9)}${cloud(760, 170, 230, 0.9)}
+    ${hills(S, 300, false)}
+    <div class="badge" id="b"><div class="box"><div class="n">NEAR</div><div class="lf">LIFE</div></div></div>`;
+  const b = document.getElementById("b");
+  requestAnimationFrame(() => { b.style.left = (S - b.offsetWidth) / 2 + "px"; b.style.top = (S - b.offsetHeight) / 2 - 10 + "px"; b.style.transform = "scale(1.3)"; });
+} else {
+  const Wd = 1500, Ht = 500;
+  root.style.width = Wd + "px"; root.style.height = Ht + "px";
+  root.innerHTML = `<div class="sky"></div>
+    <div class="sun" style="left:-120px;top:-170px;width:520px;height:520px"></div>
+    ${cloud(300, 40, 170)}${cloud(1080, 30, 150, 0.85)}${cloud(620, 22, 120, 0.8)}${cloud(1330, 150, 140, 0.8)}
+    ${hills(Wd, 230)}
+    <div class="card" style="left:1145px;top:160px;width:330px;height:186px;transform:rotate(5deg)"><img src="../reveal/site/img/city.jpg"></div>
+    <div class="card" style="left:1035px;top:228px;width:290px;height:163px;transform:rotate(-4deg)"><img src="../reveal/site/img/inside.jpg"></div>
+    <div class="word" id="w" style="font-size:150px"><span class="a">NEAR</span><span class="b">LIFE</span></div>
+    <div class="ribbon" id="r" style="font-size:34px;padding:6px 26px">A SHARED LIFE SIM ON NEAR</div>
+    <div class="chip" style="left:1060px;top:96px"><span class="ic"><img src="../reveal/site/img/near.png"></span>Built on NEAR</div>`;
+  const w = document.getElementById("w"), r = document.getElementById("r");
+  requestAnimationFrame(() => {
+    const cx = 600;
+    w.style.left = cx - w.offsetWidth / 2 + "px"; w.style.top = "120px";
+    r.style.left = cx - r.offsetWidth / 2 + "px"; r.style.top = "290px";
+  });
+}
+</script>
+</body>
+</html>
