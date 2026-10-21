@@ -115,7 +115,7 @@ export function RealTxProvider({ me, authHeaders, children }: { me: HouseholdVie
               {done ? (
                 <>
                   <div className="text-sm text-slate-300">Transaction sent and executed.</div>
-                  <a href={txUrl(done)} target="_blank" rel="noreferrer" className="block truncate rounded-xl bg-white/5 px-3 py-2 font-mono text-xs text-[#00ec97]">
+                  <a href={txUrl(done)} target="_blank" rel="noreferrer" className="block truncate rounded-xl bg-white/5 px-3 py-2 font-mono text-xs text-[#ffd23f]">
                     {done} ↗
                   </a>
                   <button onClick={() => setPending(null)} className="btn-neon w-full cursor-pointer rounded-2xl py-3 font-bold">
@@ -270,7 +270,7 @@ export function RealDaoPanel({ characterId }: { characterId?: string }) {
                       characterId,
                     })
                   }
-                  className={cn("flex-1 cursor-pointer rounded-lg py-1.5 text-xs font-bold", yes ? "bg-[#00ec97]/20 text-[#00ec97]" : "bg-rose-500/15 text-rose-300")}
+                  className={cn("flex-1 cursor-pointer rounded-lg py-1.5 text-xs font-bold", yes ? "bg-[#3ddc84]/30 text-[#ffd23f]" : "bg-rose-500/15 text-rose-300")}
                 >
                   {yes ? "Approve" : "Reject"}
                 </button>
@@ -312,7 +312,7 @@ export function RealSwapPanel({ characterId, via }: { characterId?: string; via?
       <div className="flex gap-2">
         <input value={amt} onChange={(e) => setAmt(e.target.value)} className={cn(input, "w-20 flex-none font-mono")} />
         <span className="self-center text-sm text-slate-400">NEAR →</span>
-        <select value={asset} onChange={(e) => setAsset(e.target.value)} className={cn(input, "bg-[#0b0d1a]")}>
+        <select value={asset} onChange={(e) => setAsset(e.target.value)} className={cn(input, "bg-[#1a2f9a]")}>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
@@ -320,7 +320,7 @@ export function RealSwapPanel({ characterId, via }: { characterId?: string; via?
           ))}
         </select>
       </div>
-      {quote && <div className="font-mono text-xs text-[#00ec97]">{quote}</div>}
+      {quote && <div className="font-mono text-xs text-[#ffd23f]">{quote}</div>}
       <div className="flex gap-2">
         <button
           disabled={!valid || loading || !real.accountId}

@@ -28,7 +28,7 @@ function Swatches({ colors, value, onChange }: { colors: string[]; value: string
         <button
           key={c}
           onClick={() => onChange(c)}
-          className={cn("size-7 cursor-pointer rounded-full border-2", value === c ? "border-[#00ec97] ring-2 ring-[#00ec97]/40" : "border-white/20")}
+          className={cn("size-7 cursor-pointer rounded-full border-2", value === c ? "border-[#ffd23f] ring-[3px] ring-[#0d1b5e]" : "border-[#0d1b5e]")}
           style={{ background: c }}
         />
       ))}
@@ -51,7 +51,7 @@ export function CreateHousehold({ onCreate }: { onCreate: (body: unknown) => Pro
   return (
     <div className="pointer-events-auto absolute inset-0 z-40 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
       <div className="sheet-in glass-strong flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:rounded-3xl">
-        <div className="relative h-60 shrink-0 bg-[radial-gradient(ellipse_at_bottom,#1f2a55,#0b0d1a_70%)]">
+        <div className="relative h-60 shrink-0 bg-[radial-gradient(ellipse_at_bottom,#9ad7ff,#3d6cf2_70%)]">
           <Canvas camera={{ position: [0, 0.9, 2.6], fov: 35 }}>
             <ambientLight intensity={0.8} />
             <directionalLight position={[2, 4, 3]} intensity={1.4} />
@@ -83,30 +83,30 @@ export function CreateHousehold({ onCreate }: { onCreate: (body: unknown) => Pro
               </button>
             )}
           </div>
-          <button onClick={() => update({ look: randomLook() })} className="absolute right-3 bottom-3 cursor-pointer rounded-xl bg-white/10 px-3 py-1.5 text-sm font-semibold text-slate-200">
+          <button onClick={() => update({ look: randomLook() })} className="btn-gold absolute right-3 bottom-3 cursor-pointer rounded-xl px-3 py-1.5 text-sm">
             🎲 Random
           </button>
         </div>
 
         <div className="space-y-4 overflow-y-auto p-5">
-          <div className="text-2xl font-black text-white">Create your household</div>
+          <div className="font-display text-2xl text-stroke uppercase">Create your household</div>
           <label className="block">
-            <span className="font-mono text-[11px] font-bold tracking-widest text-slate-500 uppercase">Household name</span>
+            <span className="text-[11px] font-black tracking-widest text-[#ffd23f] uppercase">Household name</span>
             <input
               value={name}
               maxLength={32}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[#00ec97]"
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[#ffd23f]"
             />
           </label>
           <div className="flex items-end gap-2">
             <label className="block flex-1">
-              <span className="font-mono text-[11px] font-bold tracking-widest text-slate-500 uppercase">Sim name</span>
+              <span className="text-[11px] font-black tracking-widest text-[#ffd23f] uppercase">Sim name</span>
               <input
                 value={c.name}
                 maxLength={16}
                 onChange={(e) => update({ name: e.target.value })}
-                className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[#00ec97]"
+                className="mt-1 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-[#ffd23f]"
               />
             </label>
             {chars.length > 1 && (

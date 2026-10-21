@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** Dark glass bottom sheet. */
+/** Game-style bottom sheet: blue panel, ribbon title, round close button. */
 export function Sheet({
   title,
   icon,
@@ -23,24 +23,31 @@ export function Sheet({
 }) {
   return (
     <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-40 flex justify-center px-2">
-      <div className={cn("sheet-in glass-strong w-full max-w-xl rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.5)]", className)}>
-        <div className="h-[3px] rounded-t-3xl bg-gradient-to-r from-[#00ec97] via-[#22d3ee] to-[#a78bfa]" />
-        <div className="flex items-center gap-3 px-5 pt-4 pb-2">
-          {icon && <div className="flex size-11 items-center justify-center rounded-2xl bg-white/5 text-2xl">{icon}</div>}
+      <div className={cn("sheet-in glass-strong relative w-full max-w-xl rounded-t-[28px] border-b-0 pt-1", className)}>
+        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
+          {icon && <div className="well flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl">{icon}</div>}
           <div className="min-w-0 flex-1">
-            <div className="text-xl font-extrabold tracking-tight text-white">{title}</div>
-            {subtitle && <div className="text-sm text-slate-400">{subtitle}</div>}
+            <div className="font-display truncate text-2xl leading-tight text-stroke uppercase">{title}</div>
+            {subtitle && <div className="text-sm font-bold text-[#cfe0ff]">{subtitle}</div>}
           </div>
           {right}
-          {onClose && (
-            <button onClick={onClose} aria-label="Close" className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-white/10 text-slate-300">
-              ✕
-            </button>
-          )}
+          {onClose && <CloseButton onClick={onClose} />}
         </div>
-        <div className="max-h-[56vh] overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
+        <div className="max-h-[56vh] overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">{children}</div>
       </div>
     </div>
+  );
+}
+
+export function CloseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Close"
+      className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#7fb2ff] to-[#2f5be8] text-lg font-black text-white shadow-[inset_0_2px_0_rgba(255,255,255,0.5),0_3px_0_#0d1b5e] active:translate-y-0.5"
+    >
+      ✕
+    </button>
   );
 }
 
@@ -61,11 +68,7 @@ export function GlassButton({
     <button
       aria-label={label}
       onClick={onClick}
-      className={cn(
-        "glass pointer-events-auto flex cursor-pointer items-center justify-center rounded-2xl text-xl shadow-lg active:scale-95",
-        active && "neon-ring text-[#00ec97]",
-        className,
-      )}
+      className={cn(active ? "btn-gold" : "btn-blue", "pointer-events-auto flex cursor-pointer items-center justify-center rounded-2xl text-xl", className)}
     >
       {children}
     </button>

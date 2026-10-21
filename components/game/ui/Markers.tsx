@@ -24,17 +24,20 @@ function Pin({
 }) {
   return (
     <button onClick={onClick} className="pointer-events-auto flex cursor-pointer flex-col items-center" style={{ WebkitTapHighlightColor: "transparent" }}>
-      <span className="glass flex items-center gap-2 rounded-2xl py-1.5 pr-3 pl-1.5" style={{ boxShadow: `0 0 0 1px ${color}88, 0 0 18px ${color}55` }}>
-        <span className="relative flex size-9 items-center justify-center rounded-xl text-xl" style={{ background: `${color}22` }}>
+      <span className="glass flex items-center gap-2 rounded-2xl py-1 pr-3 pl-1">
+        <span
+          className="relative flex size-9 items-center justify-center rounded-xl border-[3px] border-[#0d1b5e] text-xl"
+          style={{ background: `linear-gradient(180deg, ${color}, ${color}aa)` }}
+        >
           {emoji}
           {dot && <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full border border-slate-900" style={{ background: dot }} />}
         </span>
         <span className="flex flex-col items-start leading-tight">
-          <span className="max-w-36 truncate text-xs font-bold text-white">{label}</span>
-          {sub && <span className="text-[10px] text-slate-400">{sub}</span>}
+          <span className="font-display max-w-36 truncate text-sm text-stroke">{label}</span>
+          {sub && <span className="text-[10px] font-extrabold text-[#cfe0ff]">{sub}</span>}
         </span>
       </span>
-      <span className="h-3 w-px" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
+      <span className="h-3 w-1 rounded-b bg-[#0d1b5e]" />
     </button>
   );
 }
@@ -43,16 +46,16 @@ function PlacePin({ emoji, label, color, real, onClick }: { emoji: string; label
   return (
     <button onClick={onClick} className="pointer-events-auto flex cursor-pointer flex-col items-center" style={{ WebkitTapHighlightColor: "transparent" }}>
       <span
-        className="flex items-center gap-1.5 rounded-xl py-1 pr-2.5 pl-1 text-[11px] font-bold whitespace-nowrap text-white"
-        style={{ background: "rgba(10,12,24,0.85)", boxShadow: `0 0 0 1px ${color}aa, 0 0 14px ${color}55` }}
+        className="font-display flex items-center gap-1.5 rounded-xl border-[3px] border-[#0d1b5e] py-0.5 pr-2 pl-0.5 text-xs whitespace-nowrap text-white shadow-[0_3px_0_#0d1b5e] [-webkit-text-stroke:0.75px_#0d1b5e] [paint-order:stroke_fill]"
+        style={{ background: "linear-gradient(180deg,#3d6cf2,#2a4ed0)" }}
       >
-        <span className="flex size-6 items-center justify-center rounded-lg text-sm" style={{ background: `${color}2a`, color }}>
+        <span className="flex size-6 items-center justify-center rounded-lg border-2 border-[#0d1b5e] text-sm" style={{ background: color }}>
           {emoji}
         </span>
         {label}
-        {real && <span className="rounded bg-amber-300 px-1 font-mono text-[8px] font-black text-slate-900">REAL</span>}
+        {real && <span className="rounded border border-[#7a3d00] bg-[#ffd23f] px-1 text-[8px] text-[#7a3d00] [-webkit-text-stroke:0]">REAL</span>}
       </span>
-      <span className="h-2.5 w-px" style={{ background: color }} />
+      <span className="h-2.5 w-1 rounded-b bg-[#0d1b5e]" />
     </button>
   );
 }
@@ -108,8 +111,8 @@ export function CityMarkers({
               emoji={mine ? "⭐" : "🏠"}
               label={h.name}
               sub={mine ? "Your home" : online ? "online" : recent ? "recently active" : "away"}
-              color={mine ? "#fbbf24" : "#00ec97"}
-              dot={online ? "#00ec97" : recent ? "#fbbf24" : "#475569"}
+              color={mine ? "#ffd23f" : "#5fd3ff"}
+              dot={online ? "#3ddc84" : recent ? "#ffd23f" : "#64748b"}
               onClick={() => onHouse(h)}
             />
           </AnchoredLabel>
@@ -131,7 +134,7 @@ export function CharacterBubbles({ household, now }: { household: HouseholdView;
             {emoji ? (
               <div className="glass flex items-center gap-1 rounded-xl px-2 py-0.5 text-lg">
                 {emoji}
-                <span className="font-mono text-[11px] font-bold text-[#00ec97]">{Math.ceil((busy!.until - now) / 1000)}s</span>
+                <span className="font-mono text-[11px] font-bold text-[#ffd23f]">{Math.ceil((busy!.until - now) / 1000)}s</span>
               </div>
             ) : (
               <div className="glass rounded-lg px-2 py-0.5 text-[11px] font-semibold">{c.name}</div>

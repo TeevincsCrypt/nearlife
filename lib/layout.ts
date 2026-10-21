@@ -69,5 +69,5 @@ export function starterLayout() {
   ]);
 }
 
-export const WALL_COLORS = ["#3a3f63", "#4b3a63", "#2f5552", "#5b3a4a", "#3a4f6b", "#4a4458"];
-export const FLOOR_COLORS = ["#8a6a50", "#7a5f48", "#6b7280", "#5f6b7a", "#9a7b5f"];
+export const WALL_COLORS = ["#7ec8ff", "#ffcf6e", "#9fe3a1", "#ffaecb", "#c4b0ff", "#8fe3dc"];
+export const FLOOR_COLORS = ["#d9a066", "#c58b52", "#e5c49b", "#b9c6dd", "#a9cf8c"];

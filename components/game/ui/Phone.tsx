@@ -9,6 +9,8 @@ import { NEED_KEYS } from "@/lib/types";
 import { cn, shortAccount, timeAgo } from "@/lib/utils";
 import { txUrl } from "@/lib/near-real";
 import { REAL_IDS, RealPanelFor } from "./RealMode";
+import { Portrait } from "./Portrait";
+import { CloseButton } from "./Sheet";
 
 export type EcoId =
   | "names"
@@ -78,20 +80,20 @@ interface Props {
 }
 
 function Row({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.05] p-3 text-slate-200", className)}>{children}</div>;
+  return <div className={cn("well flex items-center gap-3 rounded-2xl p-3 font-semibold text-white", className)}>{children}</div>;
 }
 
 function Btn({ children, onClick, disabled, tone = "neon" }: { children: ReactNode; onClick?: () => void; disabled?: boolean; tone?: "neon" | "ghost" | "red" }) {
   const tones = {
-    neon: "btn-neon",
-    ghost: "bg-white/10 text-slate-200",
-    red: "bg-rose-500/15 text-rose-300",
+    neon: "btn-gold",
+    ghost: "btn-blue",
+    red: "border-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#ff7a8a] to-[#e23d55] text-white shadow-[0_3px_0_#0d1b5e]",
   };
   return (
     <button
       disabled={disabled}
       onClick={onClick}
-      className={cn("shrink-0 cursor-pointer rounded-xl px-3 py-1.5 text-sm font-bold active:scale-95 disabled:cursor-not-allowed disabled:opacity-35", tones[tone])}
+      className={cn("font-display shrink-0 cursor-pointer rounded-xl px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-45", tones[tone])}
     >
       {children}
     </button>
@@ -104,7 +106,7 @@ function Effects({ itemId }: { itemId: string }) {
   return (
     <span className="flex flex-wrap gap-1">
       {Object.entries(item.effects ?? {}).map(([k, v]) => (
-        <span key={k} className="rounded-md bg-[#00ec97]/10 px-1.5 text-[11px] text-[#00ec97]">
+        <span key={k} className="rounded-md bg-[#0d1b5e]/35 px-1.5 text-[11px] text-[#ffd23f]">
           {NEED_META[k as NeedKey].emoji}+{v}
         </span>
       ))}
@@ -266,7 +268,7 @@ function SellApp({ snapshot, me, act, toast }: Props) {
           <span className="text-2xl">{ITEMS[l.itemId].emoji}</span>
           <div className="flex-1 text-sm">
             <b className="text-white">{ITEMS[l.itemId].name}</b> ×{l.quantity} @ {l.price} {CURRENCY_SYMBOL}
-            {l.initialQuantity > l.quantity && <span className="text-[#00ec97]"> · {l.initialQuantity - l.quantity} sold</span>}
+            {l.initialQuantity > l.quantity && <span className="text-[#ffd23f]"> · {l.initialQuantity - l.quantity} sold</span>}
           </div>
           <Btn tone="ghost" onClick={() => act(`/api/listing?id=${l.id}`, undefined, "DELETE")}>
             Cancel
@@ -341,7 +343,7 @@ function FeedApp({ snapshot, me, now }: Props) {
       {snapshot.activity.slice(0, 50).map((a) => {
         const mine = me && (a.householdId === me.id || a.counterpartyHouseholdId === me.id);
         return (
-          <div key={a.id} className={cn("flex gap-2.5 rounded-2xl border px-3 py-2 text-sm", mine ? "border-[#00ec97]/30 bg-[#00ec97]/10" : "border-white/5 bg-white/[0.04]")}>
+          <div key={a.id} className={cn("flex gap-2.5 rounded-2xl border px-3 py-2 text-sm", mine ? "border-[#0d1b5e] bg-[#0d1b5e]/35" : "border-white/5 bg-white/[0.04]")}>
             <span className="text-xl">{a.emoji}</span>
             <div className="min-w-0 flex-1">
               <div className="leading-snug text-slate-100">{a.text}</div>
@@ -371,11 +373,11 @@ function NeighborsApp({ snapshot, me, now, onVisit }: Props) {
           <Row key={h.id}>
             <span className="relative text-2xl">
               🏠
-              <span className={cn("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border border-slate-900", online ? "bg-[#00ec97]" : "bg-slate-600")} />
+              <span className={cn("absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border border-slate-900", online ? "bg-[#3ddc84]" : "bg-slate-600")} />
             </span>
             <div className="min-w-0 flex-1">
               <div className="truncate font-bold text-white">
-                {h.name} {h.id === me?.id && <span className="text-xs text-[#00ec97]">(you)</span>}
+                {h.name} {h.id === me?.id && <span className="text-xs text-[#ffd23f]">(you)</span>}
               </div>
               <div className="truncate text-xs text-slate-400">
                 {online ? "online now" : `seen ${timeAgo(h.lastActive, now)}`} · {h.characters.length} Sim{h.characters.length === 1 ? "" : "s"} · {h.activeListings} listings
@@ -408,20 +410,43 @@ function LeadersApp({ snapshot, me }: Props) {
         </span>
         <span>net worth = SB + furniture</span>
       </Row>
-      {ranked.map(({ h, worth }, i) => (
-        <Row key={h.id} className={h.id === me?.id ? "neon-ring" : undefined}>
-          <span className={cn("w-7 text-center font-mono text-lg font-black", i === 0 ? "text-amber-300" : i === 1 ? "text-slate-300" : i === 2 ? "text-orange-400" : "text-slate-500")}>
-            {i + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-bold text-white">{h.name}</div>
-            <div className="text-xs text-slate-400">
-              {h.layout.length} pieces of furniture · mood {h.mood}
-            </div>
+      <div className="ribbon mx-auto mb-1 w-fit px-4 py-1 text-center">
+        <div className="font-display text-xl leading-none text-stroke">TOP HOUSEHOLDS</div>
+        <div className="font-display text-xs text-gold">NET WORTH</div>
+      </div>
+      {ranked.map(({ h, worth }, i) => {
+        const medal = ["#ffd23f", "#cfd8e3", "#e8955a"][i];
+        const lead = h.characters[0];
+        return (
+          <div
+            key={h.id}
+            className={cn(
+              "flex items-center gap-3 rounded-2xl border-[3px] border-[#0d1b5e] p-2 pr-3 shadow-[0_3px_0_#0d1b5e]",
+              i === 0 ? "bg-gradient-to-b from-[#8ff0b5] to-[#3ccf7f]" : "bg-gradient-to-b from-[#4f7cf5] to-[#2f5be8]",
+              h.id === me?.id && "outline-[3px] outline-[#ffd23f] outline-solid",
+            )}
+          >
+            {medal ? (
+              <span
+                className="font-display flex size-9 shrink-0 items-center justify-center rounded-full border-[3px] border-[#0d1b5e] text-lg text-white [-webkit-text-stroke:1px_#0d1b5e] [paint-order:stroke_fill]"
+                style={{ background: `radial-gradient(circle at 35% 30%, #fff8, ${medal} 60%)` }}
+              >
+                {i + 1}
+              </span>
+            ) : (
+              <span className="font-display w-9 text-center text-lg text-stroke">{i + 1}</span>
+            )}
+            <span className="overflow-hidden rounded-lg border-[3px] border-[#0d1b5e]">
+              <Portrait look={lead?.look} size={40} />
+            </span>
+            <span className="font-display min-w-0 flex-1 truncate text-lg text-stroke">{h.name}</span>
+            <span className="flex items-center gap-1 rounded-xl border-[3px] border-[#0d1b5e] bg-[#14257a] px-2 py-0.5">
+              <span className="text-sm">💎</span>
+              <span className="font-display text-base text-stroke">{worth.toLocaleString()}</span>
+            </span>
           </div>
-          <span className="font-mono font-bold text-[#00ec97]">{worth.toLocaleString()}</span>
-        </Row>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -445,7 +470,7 @@ function LinkRow({ url, label }: { url: string; label?: string }) {
   return (
     <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm">
       <span className="text-slate-200">{label ?? "Open the real app"}</span>
-      <span className="font-mono text-xs text-[#00ec97]">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</span>
+      <span className="font-mono text-xs text-[#ffd23f]">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗</span>
     </a>
   );
 }
@@ -478,7 +503,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
   const cooldown = Math.max(0, (me.lastTopup ?? 0) + 5 * 60_000 - now);
   return (
     <div className="space-y-2">
-      <Row className="neon-ring flex-col items-start bg-gradient-to-br from-[#00ec97]/15 to-[#a78bfa]/10">
+      <Row className="neon-ring flex-col items-start bg-gradient-to-br from-[#3d6cf2] to-[#2a4ed0]">
         <div className="font-mono text-[10px] tracking-widest text-slate-400">SIMBUCKS · NEP-245</div>
         <div className="font-mono text-3xl font-black text-white">
           {me.balance.toLocaleString()} <span className="text-base text-slate-400">{CURRENCY_SYMBOL}</span>
@@ -489,7 +514,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
         <div className="text-[11px] text-slate-400">
           Native NEAR:{" "}
           {near?.explorer ? (
-            <a href={near.explorer} target="_blank" rel="noreferrer" className="text-[#00ec97] underline">
+            <a href={near.explorer} target="_blank" rel="noreferrer" className="text-[#ffd23f] underline">
               {near.error ? "RPC unavailable" : near.exists ? `${near.near} NEAR` : "0 (not funded yet)"} ↗
             </a>
           ) : (
@@ -517,7 +542,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
             <div className="text-sm text-slate-400">No neighbors yet. Invite a friend to move in.</div>
           ) : (
             <>
-              <select value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-white/10 bg-[#0b0d1a] px-3 py-2 text-sm text-white">
+              <select value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-white/10 bg-[#1a2f9a] px-3 py-2 text-sm text-white">
                 <option value="">Choose a neighbor…</option>
                 {neighbors.map((h) => (
                   <option key={h.id} value={h.id}>
@@ -551,7 +576,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
       {tab === "receive" && (
         <Row className="flex-col items-start">
           <div className="text-xs text-slate-400">Your account</div>
-          <code className="w-full font-mono text-[11px] break-all text-[#00ec97]">{me.accountId}</code>
+          <code className="w-full font-mono text-[11px] break-all text-[#ffd23f]">{me.accountId}</code>
           <div className="flex gap-2">
             <Btn tone="ghost" onClick={() => navigator.clipboard?.writeText(me.accountId).then(() => toast("Copied", "success"))}>
               Copy
@@ -580,7 +605,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
           </Row>
           {events.map((e) => (
             <Row key={e.seq} className="flex-col items-start gap-1">
-              <div className="font-mono text-xs font-bold text-[#00ec97]">
+              <div className="font-mono text-xs font-bold text-[#ffd23f]">
                 {e.event.event} · {timeAgo(e.ts, now)}
               </div>
               <code className="block w-full overflow-hidden text-[10px] break-all text-slate-500">{e.log.slice(0, 220)}</code>
@@ -634,10 +659,10 @@ function NamesApp() {
             <div className="text-sm text-amber-300">{res.error === "invalid account id" ? "Not a valid NEAR name" : "NEAR RPC unavailable right now"}</div>
           ) : res.exists ? (
             <div className="text-sm text-slate-300">
-              Taken · holds <span className="text-[#00ec97]">{res.near} NEAR</span> on mainnet
+              Taken · holds <span className="text-[#ffd23f]">{res.near} NEAR</span> on mainnet
             </div>
           ) : (
-            <div className="text-sm text-[#00ec97]">Available. Nobody owns this name on mainnet yet.</div>
+            <div className="text-sm text-[#ffd23f]">Available. Nobody owns this name on mainnet yet.</div>
           )}
           {res.explorer && <LinkRow url={res.explorer} label="View on NearBlocks" />}
         </Row>
@@ -799,7 +824,7 @@ function PlacesApp({ now, snapshot, onPlace }: Props) {
               <span className="block truncate font-bold text-white">{p.name}</span>
               <span className="block truncate text-xs text-slate-400">{p.actions.map((a) => a.label).join(" · ")}</span>
             </span>
-            {here > 0 && <span className="rounded-lg bg-[#00ec97]/15 px-2 py-0.5 text-xs font-bold text-[#00ec97]">{here} here</span>}
+            {here > 0 && <span className="rounded-lg bg-[#0d1b5e]/40 px-2 py-0.5 text-xs font-bold text-[#ffd23f]">{here} here</span>}
           </button>
         );
       })}
@@ -874,15 +899,15 @@ function AppIcon({ emoji, label, color, onClick, featured }: { emoji: string; la
   return (
     <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-1 active:scale-90">
       <span
-        className="relative flex size-12 items-center justify-center rounded-2xl border bg-white/[0.04] text-xl font-black"
-        style={{ borderColor: `${color}66`, boxShadow: `0 0 14px ${color}33, inset 0 0 10px ${color}1a`, color }}
+        className="relative flex size-[52px] items-center justify-center rounded-2xl border-[3px] border-[#0d1b5e] text-2xl font-black text-white"
+        style={{ background: `linear-gradient(180deg, ${color}, ${color}cc 55%, ${color}99)`, boxShadow: "inset 0 3px 0 rgba(255,255,255,0.45), inset 0 -3px 0 rgba(13,27,94,0.25), 0 4px 0 #0d1b5e" }}
       >
-        {emoji}
+        <span className="drop-shadow-[0_2px_0_rgba(13,27,94,0.55)]">{emoji}</span>
         {featured && (
-          <span className="absolute -top-1.5 -right-1.5 rounded bg-amber-300 px-1 font-mono text-[8px] leading-tight font-black text-slate-900">REAL</span>
+          <span className="font-display absolute -top-2 -right-2 rounded-md border-2 border-[#7a3d00] bg-[#ffd23f] px-1 text-[9px] leading-tight text-[#7a3d00]">REAL</span>
         )}
       </span>
-      <span className="w-full truncate text-center text-[10px] font-medium text-slate-300">{label}</span>
+      <span className="font-display w-full truncate text-center text-[11px] text-stroke">{label}</span>
     </button>
   );
 }
@@ -896,27 +921,26 @@ export function Phone(props: Props) {
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/55 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
-      <div className="phone-in relative w-full max-w-[420px] rounded-[30px] border border-white/10 bg-[#0a0c18] p-2 shadow-[0_0_60px_rgba(0,236,151,0.15)]">
-        <div className="relative flex h-[min(80vh,720px)] flex-col overflow-hidden rounded-[24px] bg-[radial-gradient(ellipse_at_top,#1b2148,#0b0d1a_60%)]">
-          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:24px_24px]" />
-          <div className="relative flex items-center gap-2 px-4 pt-3 pb-2">
+      <div className="phone-in relative w-full max-w-[420px] rounded-[34px] border-[4px] border-[#0d1b5e] bg-gradient-to-b from-[#5fd3ff] to-[#2f5be8] p-2 shadow-[inset_0_3px_0_rgba(255,255,255,0.5),0_6px_0_#0d1b5e]">
+        <div className="game-bg relative flex h-[min(80vh,720px)] flex-col overflow-hidden rounded-[26px] border-[3px] border-[#0d1b5e]">
+          <div className="relative flex items-center gap-2 border-b-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#3d6cf2] to-[#2a4ed0] px-3 py-2">
             {app === "home" ? (
-              <span className="font-mono text-xs font-bold tracking-[0.25em] text-[#00ec97]">NEAR PAD</span>
+              <span className="font-display text-xl text-stroke">
+                NEAR <span className="text-gold">PAD</span>
+              </span>
             ) : (
               <>
-                <button onClick={() => setApp("home")} className="cursor-pointer rounded-lg bg-white/10 px-2.5 py-1 text-sm font-semibold text-slate-200">
-                  ‹
+                <button onClick={() => setApp("home")} aria-label="Back" className="btn-blue flex size-9 cursor-pointer items-center justify-center rounded-xl text-lg">
+                  ↩
                 </button>
-                <span className="text-lg font-extrabold text-white">{meta?.label}</span>
+                <span className="font-display truncate text-xl text-stroke uppercase">{meta?.label}</span>
               </>
             )}
-            <span className="ml-auto font-mono text-xs text-slate-400">
+            <span className="font-display ml-auto text-sm text-[#cfe0ff]">
               {clock.hour % 12 || 12}:{String(clock.minute).padStart(2, "0")}
-              {clock.hour < 12 ? "am" : "pm"}
+              {clock.hour < 12 ? "AM" : "PM"}
             </span>
-            <button onClick={onClose} aria-label="Close" className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-white/10 text-slate-300">
-              ✕
-            </button>
+            <CloseButton onClick={onClose} />
           </div>
 
           {app === "home" ? (
@@ -924,31 +948,31 @@ export function Phone(props: Props) {
               {me && (
                 <button
                   onClick={() => setApp("wallet")}
-                  className="mb-4 cursor-pointer rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-left"
+                  className="glass mb-4 mt-3 cursor-pointer rounded-2xl p-3 text-left"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <span>{me.name}</span>
-                    <span className="font-mono text-[#00ec97]">Ⓝ {shortAccount(me.accountId)}</span>
+                    <span className="font-mono text-[#ffd23f]">Ⓝ {shortAccount(me.accountId)}</span>
                   </div>
-                  <div className="font-mono text-2xl font-black text-white">
-                    {me.balance.toLocaleString()} <span className="text-sm text-[#00ec97]">{CURRENCY_SYMBOL}</span>
+                  <div className="font-display text-3xl text-stroke">
+                    {me.balance.toLocaleString()} <span className="text-base text-gold">{CURRENCY_SYMBOL}</span>
                   </div>
                   <div className="text-[11px] text-slate-500">
                     {props.snapshot.listings.filter((l) => l.sellerHouseholdId === me.id).length} live listings · {props.snapshot.households.length} households in town
                   </div>
                 </button>
               )}
-              <div className="mb-2 font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">NEARLIFE</div>
-              <div className="grid grid-cols-5 gap-x-1.5 gap-y-3">
+              <div className="font-display mb-2 text-base text-stroke">NEARLIFE</div>
+              <div className="grid grid-cols-5 gap-x-1.5 gap-y-4">
                 {APPS.map((a) => (
                   <AppIcon key={a.id} emoji={a.emoji} label={a.label} color={a.color} onClick={() => setApp(a.id)} />
                 ))}
               </div>
-              <div className="mt-5 mb-2 flex items-center justify-between font-mono text-[10px] font-bold tracking-[0.25em] text-slate-500">
-                <span>NEAR ECOSYSTEM</span>
-                <span className="tracking-normal text-amber-300/80">REAL = signs real NEAR txs</span>
+              <div className="mt-5 mb-2 flex items-center justify-between">
+                <span className="font-display text-base text-stroke">NEAR ECOSYSTEM</span>
+                <span className="text-[10px] font-black text-[#ffd23f]">REAL = signs real NEAR txs</span>
               </div>
-              <div className="grid grid-cols-5 gap-x-1.5 gap-y-3">
+              <div className="grid grid-cols-5 gap-x-1.5 gap-y-4">
                 {ECO_ORDER.map((id) => (
                   <AppIcon key={id} emoji={ECO[id].emoji} label={ECO[id].label} color={ECO[id].color} onClick={() => setApp(id)} featured={REAL_IDS.has(id)} />
                 ))}
@@ -959,7 +983,7 @@ export function Phone(props: Props) {
                   const ok = await act("/api/action", { characterId: character.id, action: "socialize" });
                   if (ok) toast(`📞 ${character.name} is calling a neighbor`, "success");
                 }}
-                className="mt-5 flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#00ec97]/40 bg-[#00ec97]/10 py-3 font-semibold text-[#00ec97]"
+                className="mt-5 flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-[#0d1b5e] bg-[#0d1b5e]/35 py-3 font-semibold text-[#ffd23f]"
               >
                 📞 Call a neighbor {character ? `as ${character.name}` : ""}
               </button>

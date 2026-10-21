@@ -422,23 +422,23 @@ export function PlaceInterior({
   onSimTap?: (c: Character, h: HouseholdView) => void;
 }) {
   const sims = simsInside(place, households, now);
-  const wall = "#262b40";
+  const wall = "#4b63d6";
   return (
     <group>
       {/* street outside */}
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <circleGeometry args={[18, 40]} />
-        <meshStandardMaterial color="#2a3a34" />
+        <meshStandardMaterial color="#5fae62" />
       </mesh>
       {/* floor */}
       <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[W, D]} />
-        <meshStandardMaterial color={place.style === "pool" ? "#cbd5e1" : "#3a3f55"} />
+        <meshStandardMaterial color={place.style === "pool" ? "#e2e8f0" : "#9fb3ee"} />
       </mesh>
       {Array.from({ length: W - 1 }).map((_, i) => (
         <mesh key={`gx${i}`} position={[-W / 2 + 1 + i, 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[0.02, D]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.06} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.25} />
         </mesh>
       ))}
       {/* walls */}

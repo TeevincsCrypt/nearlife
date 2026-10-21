@@ -160,7 +160,7 @@ Requirements and limits:
 
 - Next.js 15 (App Router) + TypeScript
 - three.js via React Three Fiber + drei for the 3D home and city (all models built from primitives, no asset downloads)
-- Tailwind CSS v4, dark "night-market" glass UI
+- Tailwind CSS v4, chunky cartoon mobile-game UI (Lilita One + Nunito, blue panels, gold buttons, hex nav)
 - Privy (`@privy-io/react-auth`, `@privy-io/node`)
 - `near-api-js` v7 for RPC reads and optional settlement
 - `@noble/curves` for implicit-account derivation

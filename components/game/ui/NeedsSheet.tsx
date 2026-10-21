@@ -8,9 +8,9 @@ import { Portrait } from "./Portrait";
 import { Sheet } from "./Sheet";
 
 export function needColor(v: number) {
-  if (v >= 60) return "#00ec97";
-  if (v >= 30) return "#fbbf24";
-  return "#fb7185";
+  if (v >= 60) return "#3ddc84";
+  if (v >= 30) return "#ffd23f";
+  return "#ff5a6e";
 }
 
 export function NeedsSheet({

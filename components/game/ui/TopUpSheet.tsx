@@ -30,7 +30,7 @@ export function TopUpSheet({
         <button
           disabled={cooldown > 0}
           onClick={onFaucet}
-          className="neon-ring flex w-full cursor-pointer items-center gap-4 rounded-2xl bg-[#00ec97]/10 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
+          className="neon-ring flex w-full cursor-pointer items-center gap-4 rounded-2xl bg-[#0d1b5e]/35 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="text-3xl">🚰</span>
           <span className="flex-1">
@@ -50,7 +50,7 @@ export function TopUpSheet({
           </button>
         ))}
         <button onClick={() => onOpen("wallet")} className="w-full cursor-pointer rounded-2xl border border-white/10 p-3 text-left text-sm text-slate-400">
-          SimBucks is a NEP-245 token held by your NEAR account <code className="text-[#00ec97]">{shortAccount(household.accountId)}</code>. Open token wallet ›
+          SimBucks is a NEP-245 token held by your NEAR account <code className="text-[#ffd23f]">{shortAccount(household.accountId)}</code>. Open token wallet ›
         </button>
       </div>
     </Sheet>

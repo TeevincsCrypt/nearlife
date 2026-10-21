@@ -57,7 +57,7 @@ function House({ color, mine }: { color: string; mine?: boolean }) {
     <group>
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[w + 1.2, w + 1.2]} />
-        <meshStandardMaterial color={mine ? "#3b3a1e" : "#2a2f3f"} />
+        <meshStandardMaterial color={mine ? "#ffe08a" : "#cfd8e8"} />
       </mesh>
       <mesh position={[0, h / 2, 0]} castShadow>
         <boxGeometry args={[w, h, w]} />
@@ -66,7 +66,7 @@ function House({ color, mine }: { color: string; mine?: boolean }) {
       {/* overhanging roof slab */}
       <mesh position={[0, h + 0.08, 0.1]} castShadow>
         <boxGeometry args={[w + 0.4, 0.16, w + 0.6]} />
-        <meshStandardMaterial color="#20222e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
       <Glow p={[0, h - 0.02, w / 2 + 0.41]} s={[w + 0.4, 0.04, 0.03]} c={mine ? "#fbbf24" : color} />
       {/* glass front + door */}
@@ -76,7 +76,7 @@ function House({ color, mine }: { color: string; mine?: boolean }) {
       </mesh>
       <mesh position={[0.75, 0.5, w / 2 + 0.01]}>
         <planeGeometry args={[0.5, 1.0]} />
-        <meshStandardMaterial color="#20222e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
     </group>
   );
@@ -88,7 +88,7 @@ function OpenPlot() {
     <group>
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[3.6, 3.6]} />
-        <meshStandardMaterial color="#35503f" />
+        <meshStandardMaterial color="#7cc483" />
       </mesh>
       {[
         [0, 1.8, 3.6, 0.05],
@@ -116,7 +116,7 @@ function Tree({ p, s = 1 }: { p: [number, number]; s?: number }) {
       </mesh>
       <mesh position={[0, 1.2, 0]} castShadow>
         <sphereGeometry args={[0.6, 10, 8]} />
-        <meshStandardMaterial color="#2f7d55" flatShading />
+        <meshStandardMaterial color="#3fa34d" flatShading />
       </mesh>
     </group>
   );
@@ -169,17 +169,17 @@ function Market() {
     <group position={[7, 0, -5.5]}>
       <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[9, 7]} />
-        <meshStandardMaterial color="#2b2840" />
+        <meshStandardMaterial color="#d9c49a" />
       </mesh>
       {awnings.map((c, i) => (
         <group key={i} position={[-3 + (i % 3) * 3, 0, -1.5 + Math.floor(i / 3) * 3]}>
           <mesh position={[0, 0.45, 0]}>
             <boxGeometry args={[1.8, 0.9, 1]} />
-            <meshStandardMaterial color="#3f3a5a" />
+            <meshStandardMaterial color="#b0703a" />
           </mesh>
           <mesh position={[0, 1.6, 0]}>
             <boxGeometry args={[2.0, 0.06, 1.3]} />
-            <meshStandardMaterial color="#1f1d2e" />
+            <meshStandardMaterial color="#2a4ed0" />
           </mesh>
           <Glow p={[0, 1.56, 0.66]} s={[2.0, 0.05, 0.03]} c={c} />
           {[-0.9, 0.9].map((x) => (
@@ -425,7 +425,7 @@ function PlaceBuilding({ place }: { place: PlaceDef }) {
         {pad(5, 5, "#2a2433")}
         <mesh position={[0, 0.3, 0]}>
           <cylinderGeometry args={[1.8, 2, 0.6, 24]} />
-          <meshStandardMaterial color="#3f3a5a" />
+          <meshStandardMaterial color="#b0703a" />
         </mesh>
         <mesh position={[0, 2.3, 0]}>
           <cylinderGeometry args={[0.35, 0.45, 3, 16]} />
@@ -513,7 +513,7 @@ function Railway() {
         <group key={i} position={[x, 0, z]}>
           <mesh position={[0, 1.2, 0]}>
             <boxGeometry args={[2.6, 0.12, 2.6]} />
-            <meshStandardMaterial color="#20222e" />
+            <meshStandardMaterial color="#2a4ed0" />
           </mesh>
           <Glow p={[0, 1.12, 0]} s={[2.6, 0.04, 2.6]} c={NEON_2} i={1.2} />
           {[-1.1, 1.1].map((px) => (
@@ -685,7 +685,7 @@ export function City({
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[130, 130]} />
-        <meshStandardMaterial color="#4c7a61" />
+        <meshStandardMaterial color="#5fae62" />
       </mesh>
       {/* canal */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[20, 0.0, 44]}>
@@ -697,7 +697,7 @@ export function City({
         <group key={`rx${x}`}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, -6]}>
             <planeGeometry args={[2.4, 72]} />
-            <meshStandardMaterial color="#262a36" />
+            <meshStandardMaterial color="#56608a" />
           </mesh>
           <Glow p={[x, 0.02, -6]} s={[0.06, 0.01, 72]} c={NEON} i={1.1} />
         </group>
@@ -706,7 +706,7 @@ export function City({
         <group key={`rz${z}`}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, z]}>
             <planeGeometry args={[92, 2.4]} />
-            <meshStandardMaterial color="#262a36" />
+            <meshStandardMaterial color="#56608a" />
           </mesh>
           <Glow p={[0, 0.022, z]} s={[92, 0.01, 0.06]} c={NEON} i={1.1} />
         </group>

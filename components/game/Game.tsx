@@ -46,17 +46,13 @@ function useNow(serverNow?: number) {
   return [now + offset, offset] as const;
 }
 
-function DockButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: string; label: string }) {
+function HexButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: string; label: string }) {
   return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex w-14 cursor-pointer flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-bold tracking-wide uppercase transition",
-        active ? "bg-[#00ec97]/15 text-[#00ec97] shadow-[inset_0_0_0_1px_rgba(0,236,151,0.5)]" : "text-slate-400",
-      )}
-    >
-      <span className="text-xl leading-none">{icon}</span>
-      {label}
+    <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-0.5 active:translate-y-0.5" aria-label={label}>
+      <span className="hex-btn" data-active={active}>
+        <span className="text-[26px] leading-none drop-shadow-[0_2px_0_rgba(13,27,94,0.6)]">{icon}</span>
+      </span>
+      <span className="font-display text-[11px] leading-none text-stroke">{label}</span>
     </button>
   );
 }
@@ -178,7 +174,7 @@ export default function Game() {
 
   if (!snapshot) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-[#0b0d1a] font-mono text-sm tracking-widest text-[#00ec97]">LOADING NEARLIFE…</div>
+      <div className="flex h-dvh items-center justify-center game-bg font-display text-2xl text-gold [-webkit-text-stroke:2px_#0d1b5e]">LOADING NEARLIFE…</div>
     );
   }
 
@@ -207,7 +203,7 @@ export default function Game() {
   const placementValid = placement && me ? canPlace(me.layout, placement.itemId, placement.x, placement.z, placement.rot, placement.uid) : false;
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-[#0b0d1a] select-none">
+    <div className="relative h-dvh w-full overflow-hidden bg-[#2a4ed0] select-none">
       <div className="absolute inset-0 isolate z-0">
         <Scene kind={sceneKind} hour={clock.hour} minute={clock.minute} powerCut={Boolean(ev.powerCut)}>
           {roomHousehold ? (
@@ -296,14 +292,18 @@ export default function Game() {
       <div className="pointer-events-none absolute inset-0 z-10">
         {/* Top status strip */}
         {buyMode ? (
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-2.5 pt-[max(0.6rem,env(safe-area-inset-top))]">
-            <div className="glass pointer-events-auto flex w-full max-w-xl items-center gap-3 rounded-2xl px-3 py-2">
-              <span className="font-mono text-xs font-bold tracking-[0.25em] text-[#00ec97]">BUILD MODE</span>
-              <span className="ml-auto font-mono text-lg font-bold neon-text">
-                {me?.balance.toLocaleString()} <span className="text-[10px] text-slate-400">{CURRENCY_SYMBOL}</span>
+          <div className="pointer-events-auto absolute inset-x-0 top-0 z-30 border-b-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#3d6cf2] to-[#2a4ed0] px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2 shadow-[0_4px_0_#0d1b5e]">
+            <div className="mx-auto flex max-w-xl items-center gap-3">
+              <span className="font-display text-2xl text-stroke">BUILD</span>
+              <span className="font-display text-sm text-gold">MODE</span>
+              <span className="ml-auto flex items-center gap-1.5 rounded-xl border-[3px] border-[#0d1b5e] bg-[#0d1b5e]/50 px-2 py-0.5">
+                <span className="flex size-6 items-center justify-center rounded-full border-2 border-[#7a3d00] bg-gradient-to-b from-[#ffe46b] to-[#f59e0b] text-[11px] font-black text-[#7a3d00]">
+                  S
+                </span>
+                <span className="font-display text-lg text-stroke">{me?.balance.toLocaleString()}</span>
               </span>
-              <button onClick={() => goto("home")} className="cursor-pointer rounded-xl bg-white/10 px-3 py-1.5 text-sm font-bold text-white">
-                Done
+              <button onClick={() => goto("home")} className="btn-gold cursor-pointer rounded-xl px-4 py-1.5 text-base">
+                DONE
               </button>
             </div>
           </div>
@@ -312,37 +312,51 @@ export default function Game() {
             snapshot={snapshot}
             now={now}
             balance={me ? me.balance : null}
+            name={me?.name}
+            look={character?.look}
+            meId={me?.id}
+            onSettings={me ? () => setPhone("about") : undefined}
             onTopUp={() => setSheet("topup")}
             onTicker={() => setPhone("feed")}
             showTicker={effectiveView === "home" || effectiveView === "map"}
           />
         )}
 
-        {/* Right-hand dock */}
+        {/* Bottom bar with hexagon buttons */}
         {me && !buyMode && (
-          <div className="glass pointer-events-auto absolute right-2 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex flex-col gap-1 rounded-2xl p-1.5 shadow-xl">
-            <DockButton active={effectiveView === "home"} onClick={() => goto("home")} icon="🏠" label="Home" />
-            <DockButton
-              active={false}
-              onClick={() => {
-                goto("home");
-                setBuyMode(true);
-                setCatalogueOpen(true);
-              }}
-              icon="🛠"
-              label="Build"
-            />
-            <DockButton active={effectiveView !== "home"} onClick={() => goto("map")} icon="🌆" label="City" />
-            <div className="mx-2 my-0.5 h-px bg-white/10" />
-            <DockButton active={!!phone} onClick={() => setPhone("home")} icon="📟" label="Pad" />
+          <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-30 border-t-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#1e36a8] to-[#14257a] px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_0_rgba(13,27,94,0.5)]">
+            <div className="mx-auto flex max-w-xl items-center gap-2">
+              <button
+                aria-label="Back"
+                onClick={() => goto(effectiveView === "home" ? "map" : "home")}
+                className="btn-blue flex size-12 cursor-pointer items-center justify-center rounded-xl text-2xl"
+              >
+                {effectiveView === "home" ? "🌆" : "↩"}
+              </button>
+              <div className="ml-auto flex items-end gap-1.5">
+                <HexButton active={effectiveView === "home"} onClick={() => goto("home")} icon="🏠" label="HOME" />
+                <HexButton
+                  active={false}
+                  onClick={() => {
+                    goto("home");
+                    setBuyMode(true);
+                    setCatalogueOpen(true);
+                  }}
+                  icon="🛋️"
+                  label="BUILD"
+                />
+                <HexButton active={effectiveView === "map" || effectiveView === "place" || effectiveView === "visit"} onClick={() => goto("map")} icon="🗺️" label="CITY" />
+                <HexButton active={!!phone} onClick={() => setPhone("home")} icon="📱" label="PAD" />
+              </div>
+            </div>
           </div>
         )}
 
         {/* Visit panel */}
         {effectiveView === "visit" && visited && (
-          <div className="glass-strong pointer-events-auto absolute inset-x-2 bottom-3 z-30 mx-auto max-w-xl rounded-3xl p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            <div className="font-mono text-[10px] font-bold tracking-[0.25em] text-[#00ec97]">VISITING</div>
-            <div className="truncate text-xl font-extrabold text-white">{visited.name}</div>
+          <div className="glass-strong pointer-events-auto absolute inset-x-2 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-xl rounded-3xl p-4">
+            <div className="font-display text-sm text-gold">VISITING</div>
+            <div className="font-display truncate text-2xl text-stroke">{visited.name}</div>
             <div className="truncate text-xs text-slate-400">
               {visited.ownerNames.join(", ")} · {visited.characters.length} Sim{visited.characters.length === 1 ? "" : "s"} · {visited.activeListings} listings · mood{" "}
               {visited.mood}
@@ -353,12 +367,12 @@ export default function Game() {
               ))}
             </div>
             <div className="mt-3 flex gap-2">
-              <button onClick={() => goto("map")} className="flex-1 cursor-pointer rounded-2xl bg-white/10 py-2.5 font-semibold text-white">
-                ← City
+              <button onClick={() => goto("map")} className="btn-blue flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
+                ← CITY
               </button>
               {visited.activeListings > 0 && (
-                <button onClick={() => setPhone("market")} className="btn-neon flex-1 cursor-pointer rounded-2xl py-2.5 font-semibold">
-                  Shop their listings
+                <button onClick={() => setPhone("market")} className="btn-gold flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
+                  SHOP LISTINGS
                 </button>
               )}
             </div>
@@ -371,7 +385,7 @@ export default function Game() {
             <span className="text-3xl">{ITEMS[placement.itemId].emoji}</span>
             <div className="min-w-0 flex-1">
               <div className="truncate font-bold text-white">{ITEMS[placement.itemId].name}</div>
-              <div className={cn("text-xs", placementValid ? "text-[#00ec97]" : "text-rose-400")}>{placementValid ? "Tap the floor to move it" : "Doesn't fit here"}</div>
+              <div className={cn("text-xs", placementValid ? "text-[#ffd23f]" : "text-rose-400")}>{placementValid ? "Tap the floor to move it" : "Doesn't fit here"}</div>
             </div>
             <GlassButton label="Rotate" className="size-11" onClick={() => setPlacement({ ...placement, rot: (placement.rot + 1) % 4 })}>
               ⟳
@@ -484,16 +498,20 @@ export default function Game() {
 
         {/* Sim card (bottom-left) */}
         {me && character && !buyMode && effectiveView !== "visit" && (
-          <div className="pointer-events-none absolute bottom-0 left-0 z-30 flex gap-2 p-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="pointer-events-none absolute bottom-[calc(5.4rem+env(safe-area-inset-bottom))] left-0 z-30 flex gap-2 px-2.5">
             <button
               onClick={() => setSheet(sheet === "needs" ? null : "needs")}
-              className="glass pointer-events-auto flex cursor-pointer items-center gap-3 rounded-2xl p-2 pr-3 text-left shadow-xl"
+              className="glass pointer-events-auto flex cursor-pointer items-center gap-2.5 rounded-2xl p-1.5 pr-3 text-left"
             >
-              <Portrait look={character.look} size={48} ring={moodColor(charMood(character))} />
+              <span className="rounded-xl border-[3px] border-[#7a3d00] bg-gradient-to-b from-[#ffe46b] to-[#f59e0b] p-0.5">
+                <span className="block overflow-hidden rounded-lg">
+                  <Portrait look={character.look} size={42} />
+                </span>
+              </span>
               <span className="flex flex-col gap-1">
                 <span className="flex items-baseline gap-2">
-                  <span className="text-sm font-bold text-white">{character.name}</span>
-                  <span className="font-mono text-xs font-bold" style={{ color: moodColor(charMood(character)) }}>
+                  <span className="font-display text-base leading-none text-stroke">{character.name}</span>
+                  <span className="font-display text-sm leading-none" style={{ color: moodColor(charMood(character)) }}>
                     {charMood(character)}%
                   </span>
                 </span>
@@ -503,8 +521,8 @@ export default function Game() {
                     return (
                       <span key={k} className="flex flex-col items-center gap-0.5" title={NEED_META[k].label}>
                         <span className="text-[11px] leading-none">{NEED_META[k].emoji}</span>
-                        <span className="h-1.5 w-5 overflow-hidden rounded-full bg-white/10">
-                          <span className="block h-full rounded-full" style={{ width: `${v}%`, background: needColor(v) }} />
+                        <span className="bar w-6">
+                          <span style={{ width: `${v}%`, background: needColor(v) }} />
                         </span>
                       </span>
                     );

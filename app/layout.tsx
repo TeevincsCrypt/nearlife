@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Lilita_One, Nunito } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+
+const display = Lilita_One({ weight: "400", subsets: ["latin"], variable: "--font-lilita", display: "swap" });
+const body = Nunito({ weight: ["600", "700", "800", "900"], subsets: ["latin"], variable: "--font-nunito", display: "swap" });
 
 export const metadata: Metadata = {
   title: "NEARLIFE",
@@ -14,12 +18,12 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#bfe0f2",
+  themeColor: "#2443c9",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${display.variable} ${body.variable}`}>
       <body className="font-sans">
         <Providers>{children}</Providers>
       </body>

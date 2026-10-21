@@ -27,7 +27,7 @@ export function FurnitureMenu({
   const busy = character?.busy && character.busy.until > now ? character.busy : null;
   const noPower = powerCut && spec.powered;
   return (
-    <div className="pointer-events-auto absolute inset-x-0 bottom-36 z-40 flex justify-center px-4">
+    <div className="pointer-events-auto absolute inset-x-0 bottom-[calc(10.5rem+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
       <div className="sheet-in glass-strong w-full max-w-sm rounded-3xl p-4 shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="flex size-11 items-center justify-center rounded-2xl bg-white/5 text-3xl">{item.emoji}</div>

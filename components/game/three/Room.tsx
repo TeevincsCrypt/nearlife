@@ -25,9 +25,9 @@ export interface Placement {
 }
 
 export function moodColor(mood: number) {
-  if (mood >= 65) return "#00ec97";
-  if (mood >= 35) return "#fbbf24";
-  return "#fb7185";
+  if (mood >= 65) return "#3ddc84";
+  if (mood >= 35) return "#ffd23f";
+  return "#ff5a6e";
 }
 
 const NEON = "#00ec97";
@@ -253,11 +253,11 @@ function Walls({ color, glow }: { color: string; glow: boolean }) {
       {/* wall caps */}
       <mesh position={[0, WALL_H + 0.04, -HALF - 0.075]}>
         <boxGeometry args={[ROOM_SIZE + 0.3, 0.08, 0.2]} />
-        <meshStandardMaterial color="#1e1b2e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
       <mesh position={[-HALF - 0.075, WALL_H + 0.04, 0]}>
         <boxGeometry args={[0.2, 0.08, ROOM_SIZE]} />
-        <meshStandardMaterial color="#1e1b2e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
       {/* door */}
       <mesh position={[-HALF + 0.005, 1.0, DOOR[1]]}>
@@ -308,11 +308,11 @@ function Walls({ color, glow }: { color: string; glow: boolean }) {
       {/* low front ledges so the room reads as a cutaway */}
       <mesh position={[0, 0.08, HALF + 0.05]}>
         <boxGeometry args={[ROOM_SIZE + 0.3, 0.16, 0.1]} />
-        <meshStandardMaterial color="#1e1b2e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
       <mesh position={[HALF + 0.05, 0.08, 0]}>
         <boxGeometry args={[0.1, 0.16, ROOM_SIZE]} />
-        <meshStandardMaterial color="#1e1b2e" />
+        <meshStandardMaterial color="#2a4ed0" />
       </mesh>
     </group>
   );
@@ -323,12 +323,12 @@ function Yard() {
     <group>
       <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[16, 48]} />
-        <meshStandardMaterial color="#4f7a64" />
+        <meshStandardMaterial color="#5fae62" />
       </mesh>
       {/* front path */}
       <mesh position={[2.5, -0.01, HALF + 1.6]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[2.2, 3]} />
-        <meshStandardMaterial color="#3a3f55" />
+        <meshStandardMaterial color="#d8c9a6" />
       </mesh>
       {[
         [-6, -5],
@@ -385,8 +385,8 @@ export function Room({
   return (
     <group>
       <Yard />
-      <Floor color={household.floorColor ?? "#8a6a50"} onTap={(x, z) => onFloorTap?.(x, z)} onHover={onFloorHover} />
-      <Walls color={household.wallColor ?? "#3a3f63"} glow={lightsOn} />
+      <Floor color={household.floorColor ?? "#d9a066"} onTap={(x, z) => onFloorTap?.(x, z)} onHover={onFloorHover} />
+      <Walls color={household.wallColor ?? "#7ec8ff"} glow={lightsOn} />
 
       {layout.map((f) => {
         const item = ITEMS[f.itemId];

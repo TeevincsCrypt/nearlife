@@ -26,13 +26,13 @@ export function InsideLabels({
         <AnchoredLabel key={a.id} id={`st:${a.id}`}>
           <button
             onClick={() => onStation(a.id)}
-            className="pointer-events-auto flex cursor-pointer items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold whitespace-nowrap text-white"
-            style={{ background: "rgba(10,12,24,0.88)", boxShadow: `0 0 0 1px ${place.color}aa, 0 0 14px ${place.color}55` }}
+            className="font-display pointer-events-auto flex cursor-pointer items-center gap-1.5 rounded-xl border-[3px] border-[#0d1b5e] py-1 pr-2.5 pl-1 text-xs whitespace-nowrap text-white shadow-[0_3px_0_#0d1b5e] [-webkit-text-stroke:0.75px_#0d1b5e] [paint-order:stroke_fill]"
+            style={{ background: "linear-gradient(180deg,#3d6cf2,#2a4ed0)" }}
           >
-            <span className="text-base">{a.emoji}</span>
+            <span className="flex size-6 items-center justify-center rounded-lg border-2 border-[#0d1b5e] text-sm" style={{ background: place.color }}>{a.emoji}</span>
             {a.label}
             {a.cost > 0 && (
-              <span className="font-mono text-[10px]" style={{ color: place.color }}>
+              <span className="rounded-md bg-[#0d1b5e]/60 px-1 text-[10px] text-[#ffd23f] [-webkit-text-stroke:0]">
                 {a.cost} {CURRENCY_SYMBOL}
               </span>
             )}
@@ -48,7 +48,7 @@ export function InsideLabels({
               {act && <span>{act.emoji}</span>}
               {c.name}
               <span className="text-slate-400">· {h.name}</span>
-              {b && <span className="font-mono text-[#00ec97]">{Math.ceil((b.until - now) / 1000)}s</span>}
+              {b && <span className="font-mono text-[#ffd23f]">{Math.ceil((b.until - now) / 1000)}s</span>}
             </div>
           </AnchoredLabel>
         );
@@ -89,16 +89,16 @@ export function InsidePanel({
           ? `${character.name} is here. Tap a station to do something.`
           : `Tap a station to bring ${character.name} here by car, train or plane.`;
   return (
-    <div className="glass-strong pointer-events-auto absolute inset-x-2 top-[calc(max(0.6rem,env(safe-area-inset-top))+3.6rem)] z-30 mx-auto max-w-xl rounded-2xl p-2.5">
+    <div className="glass-strong pointer-events-auto absolute inset-x-2 top-[calc(max(0.6rem,env(safe-area-inset-top))+7rem)] z-30 mx-auto max-w-xl rounded-2xl p-2.5">
       <div className="flex items-center gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg text-lg" style={{ background: `${place.color}22`, color: place.color }}>
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border-[3px] border-[#0d1b5e] text-lg" style={{ background: place.color }}>
           {place.emoji}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="font-mono text-[10px] font-bold tracking-[0.2em]" style={{ color: place.color }}>
+          <div className="text-[10px] font-black tracking-[0.2em] text-[#ffd23f]">
             INSIDE
           </div>
-          <div className="truncate font-extrabold text-white">{place.name}</div>
+          <div className="font-display truncate text-lg leading-tight text-stroke">{place.name}</div>
         </div>
         {sims.length > 0 && (
           <div className="flex -space-x-2">
@@ -110,14 +110,14 @@ export function InsidePanel({
       </div>
       <div className="mt-1 text-xs text-slate-300">{status}</div>
       <div className="mt-2 flex gap-2">
-        <button onClick={onCity} className="cursor-pointer rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white">
+        <button onClick={onCity} className="btn-blue cursor-pointer rounded-xl px-3 py-1.5 text-xs">
           ← City
         </button>
-        <button onClick={onAll} className="flex-1 cursor-pointer rounded-xl bg-white/10 py-1.5 text-xs font-semibold text-white">
+        <button onClick={onAll} className="btn-blue flex-1 cursor-pointer rounded-xl py-1.5 text-xs">
           All activities
         </button>
         {here && !busyHere && (
-          <button onClick={onHome} className="btn-neon cursor-pointer rounded-xl px-3 py-1.5 text-xs font-bold">
+          <button onClick={onHome} className="btn-gold cursor-pointer rounded-xl px-3 py-1.5 text-xs">
             🏠 Go home
           </button>
         )}

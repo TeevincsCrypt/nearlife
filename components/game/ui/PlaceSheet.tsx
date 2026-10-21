@@ -94,7 +94,7 @@ export function PlaceSheet({
         ) : (
           <>
             {atPlace && character ? (
-              <div className="rounded-2xl border border-[#00ec97]/30 bg-[#00ec97]/10 px-3 py-2 text-sm text-[#b7ffe1]">
+              <div className="rounded-2xl border border-[#0d1b5e] bg-[#0d1b5e]/35 px-3 py-2 text-sm text-white">
                 {character.name} is already here, so there's no fare.
               </div>
             ) : (
@@ -107,7 +107,7 @@ export function PlaceSheet({
                     onClick={() => setMode(m)}
                     className={cn(
                       "flex cursor-pointer flex-col items-center rounded-2xl border px-2 py-2.5",
-                      mode === m ? "neon-ring border-transparent bg-[#00ec97]/10" : "border-white/10 bg-white/[0.03]",
+                      mode === m ? "neon-ring border-transparent bg-[#0d1b5e]/35" : "border-white/10 bg-white/[0.03]",
                     )}
                   >
                     <span className="text-2xl">{TRAVEL[m].emoji}</span>

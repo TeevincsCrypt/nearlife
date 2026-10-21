@@ -17,14 +17,14 @@ function daylight(hour: number, minute: number) {
 function Lights({ day, powerCut }: { day: number; powerCut: boolean }) {
   const { scene } = useThree();
   useEffect(() => {
-    const night = new Color("#141936");
-    const sky = new Color("#8ec5de");
+    const night = new Color("#2a2f8f");
+    const sky = new Color("#6fb7ff");
     scene.background = night.lerp(sky, day);
   }, [day, scene]);
   return (
     <>
-      <hemisphereLight args={["#e0e7ff", "#3f5a4c", 0.7 + day * 0.4]} />
-      <ambientLight intensity={(powerCut ? 0.3 : 0.45) + day * 0.2} color={day > 0.5 ? "#ffffff" : "#dbe4ff"} />
+      <hemisphereLight args={["#e8f0ff", "#5a8f5f", 0.9 + day * 0.4]} />
+      <ambientLight intensity={(powerCut ? 0.4 : 0.55) + day * 0.2} color={day > 0.5 ? "#ffffff" : "#dbe4ff"} />
       <directionalLight
         position={[10, 18, 8]}
         intensity={0.6 + day * 1.0}
@@ -56,7 +56,7 @@ type Kind = "room" | "city" | "interior";
 function targetFor(kind: Kind, portrait: boolean): [number, number, number] {
   if (kind === "room") return portrait ? [0.9, 0, 0.9] : [0, 0.6, 0];
   // Interiors sit lower on screen, leaving room for the "inside" panel at the top.
-  if (kind === "interior") return portrait ? [-0.2, 0, -0.2] : [0, 1.2, 0];
+  if (kind === "interior") return portrait ? [-0.9, 0, -0.9] : [0, 1.2, 0];
   return [0, 0, 2];
 }
 
