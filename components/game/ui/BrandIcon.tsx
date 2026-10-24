@@ -21,6 +21,7 @@ export const LOGOS: Record<string, string> = {
   electric: "/logos/electric.png",
   a16z: "/logos/a16z.png",
   dragonfly: "/logos/dragonfly.png",
+  club: "/logos/club.svg",
   // Pad apps that don't share a place id
   wallet: "/logos/near.png",
   names: "/logos/near.png",

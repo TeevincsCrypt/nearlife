@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toaster";
 import { useGame } from "@/hooks/use-game";
@@ -10,7 +10,9 @@ import type { PlacedFurniture } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Projector } from "./three/anchors";
-import { PLACE_BY_ID } from "@/lib/places";
+import { PLACE_BY_ID, TRAVEL, whereIs } from "@/lib/places";
+import { dmPartner } from "@/lib/chat";
+import type { Character, HouseholdView } from "@/lib/types";
 import { City, housePosition, type Landmark, type Trip } from "./three/City";
 import { PlaceSheet } from "./ui/PlaceSheet";
 import { PlaceInterior } from "./three/PlaceInterior";
@@ -26,7 +28,8 @@ import { CharacterBubbles, CityMarkers } from "./ui/Markers";
 import { NeedsSheet, needColor } from "./ui/NeedsSheet";
 import { Phone, type AppId } from "./ui/Phone";
 import { Portrait } from "./ui/Portrait";
-import { GlassButton } from "./ui/Sheet";
+import { GlassButton, Sheet } from "./ui/Sheet";
+import { ONLINE_MS, unreadCounts, useChatSeen, whereabouts } from "./ui/Chat";
 import { TopUpSheet } from "./ui/TopUpSheet";
 import { Welcome } from "./ui/Welcome";
 
@@ -46,12 +49,17 @@ function useNow(serverNow?: number) {
   return [now + offset, offset] as const;
 }
 
-function HexButton({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: string; label: string }) {
+function HexButton({ active, onClick, icon, label, badge }: { active: boolean; onClick: () => void; icon: string; label: string; badge?: number }) {
   return (
-    <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-0.5 active:translate-y-0.5" aria-label={label}>
+    <button onClick={onClick} className="relative flex cursor-pointer flex-col items-center gap-0.5 active:translate-y-0.5" aria-label={label}>
       <span className="hex-btn" data-active={active}>
         <span className="text-[26px] leading-none drop-shadow-[0_2px_0_rgba(13,27,94,0.6)]">{icon}</span>
       </span>
+      {!!badge && (
+        <span className="font-display absolute -top-1 -right-1 z-10 min-w-5 rounded-full border-2 border-[#0d1b5e] bg-[#ff5a6e] px-1 text-center text-[11px] leading-4 text-white">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
       <span className="font-display text-[11px] leading-none text-stroke">{label}</span>
     </button>
   );
@@ -60,7 +68,7 @@ function HexButton({ active, onClick, icon, label }: { active: boolean; onClick:
 export default function Game() {
   const auth = useAuth();
   const toast = useToast();
-  const { snapshot, myHousehold, act } = useGame();
+  const { snapshot, myHousehold, act, refresh } = useGame();
   const [now, clockOffset] = useNow(snapshot?.now);
 
   const [view, setView] = useState<View>("home");
@@ -77,6 +85,10 @@ export default function Game() {
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [insideId, setInsideId] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<string | undefined>(undefined);
+  const [arrival, setArrival] = useState<{ placeId: string; charId: string } | null>(null);
+  const [simMenu, setSimMenu] = useState<{ c: Character; h: HouseholdView } | null>(null);
+  const [chatWith, setChatWith] = useState<string | null>(null);
+  const chat = useChatSeen();
 
   const me = myHousehold;
   const effectiveView: View = !me && view === "home" ? "map" : view;
@@ -86,6 +98,86 @@ export default function Game() {
   const ev = WORLD_EVENTS.find((e) => e.id === snapshot?.worldEvent?.id) ?? WORLD_EVENTS[0];
   const clock = gameClock(now);
   const latestTrade = useMemo(() => snapshot?.activity.find((a) => a.type === "purchase"), [snapshot?.activity]);
+  const unread = snapshot ? unreadCounts(snapshot.chat, me, now, chat.seen).total : 0;
+  const trip = character?.busy?.action.startsWith("travel:") && character.busy.place && (character.busy.arriveAt ?? 0) > now ? character.busy : null;
+
+  // After a trip: once the Sim arrives, offer to go inside.
+  useEffect(() => {
+    if (!arrival || !me) return;
+    const c = me.characters.find((x) => x.id === arrival.charId);
+    if (!c) return setArrival(null);
+    const w = whereIs(c, now);
+    if (w.placeId !== arrival.placeId) {
+      if (!w.arriving) setArrival(null);
+      return;
+    }
+    if (w.arriving) return;
+    const place = PLACE_BY_ID[arrival.placeId];
+    toast(`📍 ${c.name} arrived at ${place.short}`, "success");
+    setArrival(null);
+    if (!(view === "place" && insideId === place.id)) {
+      setSheet(null);
+      setPlaceId(place.id);
+    }
+  }, [arrival, me, now, view, insideId, toast]);
+
+  // Pop up direct messages and invites from other players as they arrive.
+  const seenMsg = useRef<number | null>(null);
+  useEffect(() => {
+    if (!snapshot || !me) return;
+    const latest = snapshot.chat.at(-1)?.ts ?? 0;
+    if (seenMsg.current === null) {
+      seenMsg.current = latest;
+      return;
+    }
+    const fresh = snapshot.chat.filter((m) => m.ts > seenMsg.current! && m.fromHouseholdId !== me.id && dmPartner(m.channel, me.id));
+    seenMsg.current = Math.max(seenMsg.current, latest);
+    if (phone === "chat") return;
+    for (const m of fresh.slice(-2)) toast(m.kind === "invite" ? `📍 ${m.fromName}: ${m.text} (open 💬 Chat)` : `💬 ${m.fromName}: ${m.text}`);
+  }, [snapshot, me, phone, toast]);
+
+  // Keep progress with the login: carry a guest household over, and use the player's own wallet.
+  const synced = useRef({ guest: false, wallet: false });
+  const [linking, setLinking] = useState(false);
+  useEffect(() => {
+    if (auth.method !== "privy" || !snapshot?.me) return;
+    if (auth.savedGuestId && !synced.current.guest) {
+      synced.current.guest = true;
+      setLinking(true);
+      void (async () => {
+        try {
+          const res = await fetch("/api/account/link", {
+            method: "POST",
+            headers: { "content-type": "application/json", ...(await auth.authHeaders()), "x-guest-id": auth.savedGuestId! },
+            body: JSON.stringify({ nearAccountId: auth.nearAddress ?? undefined }),
+          });
+          const json = await res.json();
+          if (res.ok) {
+            if (json.snapshot) await refresh(json.snapshot, { revalidate: false });
+            if (json.result?.merged) toast("Your guest progress is now saved to your account", "success");
+            if (!json.result?.conflict) auth.forgetGuest();
+          }
+        } finally {
+          setLinking(false);
+        }
+      })();
+      return;
+    }
+    if (me && me.accountSource === "derived" && auth.nearAddress && !synced.current.wallet) {
+      synced.current.wallet = true;
+      void act<{ migrated: boolean }>("/api/account/link", { nearAccountId: auth.nearAddress }).then((r) => {
+        if (r?.migrated) toast("🔐 Your household now uses your own NEAR wallet", "success");
+      });
+    }
+  }, [auth, snapshot?.me, me, act, refresh, toast]);
+
+  // Tell the owner (once) when the server isn't saving the world anywhere.
+  const warned = useRef(false);
+  useEffect(() => {
+    if (!snapshot || warned.current || snapshot.config.storage !== "memory") return;
+    warned.current = true;
+    if (!/^(localhost|127\.|0\.0\.0\.0)/.test(window.location.hostname)) toast("⚠️ This server has no database yet, so progress resets when it restarts (see Pad → About)", "error");
+  }, [snapshot, toast]);
   // Every Sim currently travelling to / at a city place, from any household (shared world).
   const trips = useMemo(() => {
     if (!snapshot) return [] as Array<Trip & { label: string }>;
@@ -189,8 +281,8 @@ export default function Game() {
   /** Tap on a station inside a building: act right away if the Sim is already here, else pick travel. */
   async function onStation(actionId: string) {
     if (!insidePlace) return;
-    const busyNow = character?.busy && character.busy.until > now;
-    if (character && !busyNow && character.location === insidePlace.id) {
+    const w = character ? whereIs(character, now) : null;
+    if (character && !w!.busy && w!.placeId === insidePlace.id) {
       const a = insidePlace.actions.find((x) => x.id === actionId);
       const ok = await act("/api/place", { characterId: character.id, placeId: insidePlace.id, actionId, travel: "car" });
       if (ok && a) toast(`${a.emoji} ${character.name}: ${a.label}`, "success");
@@ -257,7 +349,8 @@ export default function Game() {
               now={now}
               selectedCharId={character?.id}
               onStation={onStation}
-              onSimTap={(c, h) => toast(`${c.name} (${h.name})`)}
+              onSimTap={(c, h) => setSimMenu({ c, h })}
+              waving={new Set(snapshot.chat.filter((m) => m.kind === "wave" && now - m.ts < 2500 && m.fromCharacterId).map((m) => m.fromCharacterId!))}
             />
           ) : (
             <City households={snapshot.households} myHouseholdId={me?.id} latestTrade={latestTrade} trips={trips} clockOffset={clockOffset} />
@@ -270,7 +363,15 @@ export default function Game() {
         {roomHousehold ? (
           !buyMode && <CharacterBubbles household={roomHousehold} now={now} />
         ) : insidePlace ? (
-          <InsideLabels place={insidePlace} households={snapshot.households} now={now} onStation={onStation} />
+          <InsideLabels
+            place={insidePlace}
+            households={snapshot.households}
+            now={now}
+            chat={snapshot.chat}
+            meId={me?.id}
+            onStation={onStation}
+            onSim={(c, h) => setSimMenu({ c, h })}
+          />
         ) : (
           <CityMarkers
             households={snapshot.households}
@@ -346,7 +447,7 @@ export default function Game() {
                   label="BUILD"
                 />
                 <HexButton active={effectiveView === "map" || effectiveView === "place" || effectiveView === "visit"} onClick={() => goto("map")} icon="🗺️" label="CITY" />
-                <HexButton active={!!phone} onClick={() => setPhone("home")} icon="📱" label="PAD" />
+                <HexButton active={!!phone} onClick={() => setPhone(unread ? "chat" : "home")} icon="📱" label="PAD" badge={unread} />
               </div>
             </div>
           </div>
@@ -370,6 +471,17 @@ export default function Game() {
               <button onClick={() => goto("map")} className="btn-blue flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
                 ← CITY
               </button>
+              {me && (
+                <button
+                  onClick={() => {
+                    setChatWith(visited.id);
+                    setPhone("chat");
+                  }}
+                  className="btn-gold flex-1 cursor-pointer rounded-2xl py-2.5 text-base"
+                >
+                  💬 MESSAGE
+                </button>
+              )}
               {visited.activeListings > 0 && (
                 <button onClick={() => setPhone("market")} className="btn-gold flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
                   SHOP LISTINGS
@@ -590,6 +702,12 @@ export default function Game() {
             }}
             onEnter={insidePlace?.id === placeId ? undefined : () => enterPlace(placeId)}
             highlight={highlight}
+            onTravel={(id) => {
+              if (character) setArrival({ placeId: id, charId: character.id });
+              setPlaceId(null);
+              setHighlight(undefined);
+              if (!(effectiveView === "place" && insideId === id)) goto("map");
+            }}
           />
         )}
 
@@ -599,6 +717,9 @@ export default function Game() {
             households={snapshot.households}
             now={now}
             character={character}
+            chat={snapshot.chat}
+            meId={me?.id}
+            act={act}
             onCity={() => goto("map")}
             onAll={() => setPlaceId(insidePlace.id)}
             onHome={async () => {
@@ -614,11 +735,79 @@ export default function Game() {
 
         {/* Onboarding */}
         {auth.ready && !auth.authenticated && <Welcome />}
-        {auth.authenticated && snapshot.me && !snapshot.me.householdId && <CreateHousehold onCreate={onCreate} />}
+        {auth.authenticated && snapshot.me && !snapshot.me.householdId && !linking && !(auth.method === "privy" && auth.savedGuestId && !synced.current.guest) && (
+          <CreateHousehold onCreate={onCreate} />
+        )}
+
+        {/* Trip in progress */}
+        {trip && !phone && !placeId && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(9.8rem+env(safe-area-inset-bottom))] z-30 flex justify-center">
+            <div className="glass font-display flex items-center gap-2 rounded-2xl px-4 py-2 text-base text-stroke">
+              <span className="text-2xl">{TRAVEL[trip.travel ?? "car"].emoji}</span>
+              {character!.name} → {PLACE_BY_ID[trip.place!].short}
+              <span className="text-gold">{Math.max(0, Math.ceil(((trip.arriveAt ?? now) - now) / 1000))}s</span>
+            </div>
+          </div>
+        )}
+
+        {/* Another player's Sim */}
+        {simMenu && (
+          <Sheet title={simMenu.c.name} subtitle={simMenu.h.id === me?.id ? "Your Sim" : simMenu.h.name} icon={<Portrait look={simMenu.c.look} size={44} />} onClose={() => setSimMenu(null)}>
+            {simMenu.h.id === me?.id ? (
+              <div className="well rounded-2xl p-3 text-sm font-bold text-white">
+                That&apos;s {simMenu.c.name}. Tap a station to do something, or open 💬 to talk to everyone here.
+              </div>
+            ) : (
+              <div className="space-y-2 pb-2">
+                <div className="text-xs font-bold text-[#cfe0ff]">
+                  {now - simMenu.h.lastActive < ONLINE_MS ? "🟢 Online now" : "Away"} · {whereabouts(simMenu.h, now).text}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={async () => {
+                      const ok = await act("/api/chat", { kind: "wave", targetCharacterId: simMenu.c.id, characterId: character?.id });
+                      if (ok) {
+                        toast(`👋 You waved at ${simMenu.c.name} (+social for both)`, "success");
+                        setSimMenu(null);
+                      }
+                    }}
+                    className="btn-gold cursor-pointer rounded-2xl py-3 text-base"
+                  >
+                    👋 Wave
+                  </button>
+                  <button
+                    onClick={() => {
+                      setChatWith(simMenu.h.id);
+                      setPhone("chat");
+                      setSimMenu(null);
+                    }}
+                    className="btn-blue cursor-pointer rounded-2xl py-3 text-base"
+                  >
+                    💬 Message
+                  </button>
+                  <button
+                    onClick={() => {
+                      const id = simMenu.h.id;
+                      setSimMenu(null);
+                      visit(id);
+                    }}
+                    className="btn-blue cursor-pointer rounded-2xl py-3 text-base"
+                  >
+                    🏠 Visit
+                  </button>
+                </div>
+                <div className="text-[11px] text-slate-400">Do an activity here at the same time to get a together bonus.</div>
+              </div>
+            )}
+          </Sheet>
+        )}
 
         {/* NEAR Pad */}
         {phone && (
           <Phone
+            key={chatWith ?? "pad"}
+            chat={chat}
+            chatWith={chatWith}
             snapshot={snapshot}
             me={me}
             character={character}
@@ -631,7 +820,10 @@ export default function Game() {
               setPhone(null);
               visit(id);
             }}
-            onClose={() => setPhone(null)}
+            onClose={() => {
+              setPhone(null);
+              setChatWith(null);
+            }}
             onPlace={(id) => {
               setPhone(null);
               setSheet(null);

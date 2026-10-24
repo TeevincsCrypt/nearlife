@@ -28,6 +28,16 @@ Open the deployed URL, or run locally with `npm install && npm run dev` and open
 
 ## How the game works
 
+- **Meet other players.** The town is shared. Everyone you see is a real player.
+  - **Chat:** the 💬 Chat app on the Pad has town chat, chat with everyone at the place your Sim is at, and direct messages with invites ("Meet me at The 24/7 Club?").
+  - **Speech bubbles:** messages pop up as bubbles over your Sim inside places.
+  - **Tap a player's Sim** to wave (+social for both), message them or visit their home.
+  - **Together bonus:** doing an activity at the same place as other players adds social and fun, and boosts payouts.
+- **Travel, then go inside.** Tap a place on the map, pick car, train or plane, and watch your Sim travel. When they arrive you can go inside and do things there.
+- **The 24/7 Club.** NEARLIFE's own nightclub, open around the clock: dance (best with friends), grab a mocktail, or DJ a set for tips.
+- **Real time.** The clock, day and night follow your own local time.
+- **Your progress follows your login.** Log in with email or Google on any device to get back to the same household. If you started as a guest, logging in carries that household over. Pad → About lets you add a second login method so either one works.
+
 - **Sims.** Stylised humans with jointed arms and legs who walk, sit at chairs and sofas, lie on beds, and leave the house for work shifts. A neon halo above the selected Sim shows its mood.
 - **Needs.** Hunger, Energy, Social, Fun and Hygiene drop in real time. Mood (their average) scales work pay.
 - **Home and furniture.** Each home is an 8×8 grid, and actions need furniture:
@@ -273,6 +283,8 @@ LID=$(curl -s -XPOST localhost:3000/api/listing -H "$A" -H "$J" -d '{"itemId":"m
 curl -s -XPOST localhost:3000/api/buy -H "$B" -H "$J" -d "{\"listingId\":\"$LID\"}" > /dev/null
 curl -s 'localhost:3000/api/activity?type=purchase&limit=5' | jq -r '.activity[].text'
 ```
+
+Chat (needs a household): `POST /api/chat` with `{"channel":"town","text":"hi"}`, `{"channel":"place:club","text":"…"}` (your Sim must be there), `{"channel":"dm:<idA>|<idB>","text":"…"}`, `{"kind":"wave","targetCharacterId":"…"}` or `{"kind":"invite","toHouseholdId":"…","placeId":"club"}`. Travel with `POST /api/place` `{"characterId":"…","placeId":"club","actionId":"__travel","travel":"car"}`.
 
 ## Logos
 

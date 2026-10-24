@@ -3,8 +3,8 @@
 import { LogoPlaque } from "./LogoBoard";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame } from "@react-three/fiber";
-import { CanvasTexture, SRGBColorSpace, type Group } from "three";
-import type { PlaceDef } from "@/lib/places";
+import { CanvasTexture, Color, SRGBColorSpace, type Group, type Mesh, type MeshStandardMaterial } from "three";
+import { whereIs, type PlaceDef } from "@/lib/places";
 import type { Character, HouseholdView } from "@/lib/types";
 import { Anchor } from "./anchors";
 import { Character3D, Halo, type Pose } from "./Character3D";
@@ -49,7 +49,16 @@ const SPOTS: Array<[number, number]> = [
   [0, 0.4],
 ];
 
+/** The club lays its stations out around the dance floor. */
+const CLUB_SPOTS: Record<string, [number, number]> = {
+  dance: [0, 0.6],
+  drink: [3.1, -1.9],
+  dj: [-2.9, -2.0],
+  hang: [-3.1, 2.5],
+};
+
 export function stationSpot(place: PlaceDef, actionId: string): [number, number] {
+  if (place.style === "club" && CLUB_SPOTS[actionId]) return CLUB_SPOTS[actionId];
   const i = Math.max(0, place.actions.findIndex((a) => a.id === actionId));
   return SPOTS[i % SPOTS.length];
 }
@@ -210,6 +219,44 @@ function StationProp({ actionId, color }: { actionId: string; color: string }) {
           ))}
         </group>
       );
+    case "dance":
+      // The dance floor itself (in the club decor) is the station.
+      return null;
+    case "drink":
+      return (
+        <group rotation={[0, -Math.PI / 2, 0]}>
+          <Box p={[0, 0.55, 0]} s={[2.4, 1.1, 0.7]} c="#ff4fd8" />
+          <Box p={[0, 1.13, 0]} s={[2.6, 0.08, 0.9]} c="#fde68a" />
+          <Glow p={[0, 0.3, 0.36]} s={[2.4, 0.06, 0.02]} c="#5fd3ff" />
+          {[-0.8, -0.3, 0.2, 0.7].map((x, i) => (
+            <Cyl key={x} p={[x, 1.32, -0.1]} r={0.06} h={0.3} c={["#3ddc84", "#ffd23f", "#5fd3ff", "#ff7aa8"][i]} e={["#3ddc84", "#ffd23f", "#5fd3ff", "#ff7aa8"][i]} />
+          ))}
+          {[-0.8, 0, 0.8].map((x) => (
+            <group key={x} position={[x, 0, 0.85]}>
+              <Cyl p={[0, 0.35, 0]} r={0.04} h={0.7} c="#e5e7eb" />
+              <Cyl p={[0, 0.72, 0]} r={0.2} h={0.07} c="#ffd23f" />
+            </group>
+          ))}
+        </group>
+      );
+    case "dj":
+      return (
+        <group rotation={[0, Math.PI / 5, 0]}>
+          <Box p={[0, 0.5, 0]} s={[2, 1, 0.8]} c="#2a4ed0" />
+          <Glow p={[0, 0.5, 0.41]} s={[1.8, 0.12, 0.02]} c="#ff4fd8" i={1.6} />
+          <Box p={[0, 1.02, 0]} s={[2, 0.05, 0.8]} c="#e5e7eb" />
+          {[-0.5, 0.5].map((x) => (
+            <Cyl key={x} p={[x, 1.07, 0]} r={0.26} h={0.04} c="#111827" e="#5fd3ff" />
+          ))}
+          {[-1.35, 1.35].map((x) => (
+            <group key={x} position={[x, 0, -0.1]}>
+              <Box p={[0, 0.7, 0]} s={[0.6, 1.4, 0.6]} c="#1e293b" />
+              <Cyl p={[0, 0.5, 0.31]} r={0.2} h={0.02} c="#64748b" />
+              <Cyl p={[0, 1.05, 0.31]} r={0.12} h={0.02} c="#64748b" />
+            </group>
+          ))}
+        </group>
+      );
     case "hang":
     default:
       return (
@@ -252,6 +299,80 @@ function NameSign({ place }: { place: PlaceDef }) {
       <planeGeometry args={[6.4, 1]} />
       <meshBasicMaterial map={tex} toneMapped={false} />
     </mesh>
+  );
+}
+
+const DANCE_COLORS = ["#ff4fd8", "#5fd3ff", "#ffd23f", "#3ddc84", "#b28cff"].map((c) => new Color(c));
+
+/** Light-up dance floor, a spinning disco ball and sweeping light beams. */
+function ClubDecor() {
+  const tiles = useRef<Array<Mesh | null>>([]);
+  const ball = useRef<Group>(null);
+  const beams = useRef<Group>(null);
+  const cells = useMemo(() => {
+    const out: Array<[number, number]> = [];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) out.push([-1.35 + i * 0.9, -0.75 + j * 0.9]);
+    return out;
+  }, []);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    const beat = Math.floor(t * 2.2);
+    tiles.current.forEach((m, i) => {
+      if (!m) return;
+      const mat = m.material as MeshStandardMaterial;
+      const col = DANCE_COLORS[(beat + i * 3 + ((i >> 2) % 2)) % DANCE_COLORS.length];
+      mat.color.copy(col);
+      mat.emissive.copy(col);
+    });
+    if (ball.current) ball.current.rotation.y = t * 0.8;
+    if (beams.current) beams.current.children.forEach((b, i) => (b.rotation.z = Math.sin(t * 1.2 + i * 1.7) * 0.5));
+  });
+  return (
+    <group>
+      {cells.map(([x, z], i) => (
+        <mesh key={i} ref={(m) => void (tiles.current[i] = m)} position={[x, 0.02, z + 0.6]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.84, 0.84]} />
+          <meshStandardMaterial color="#ff4fd8" emissive="#ff4fd8" emissiveIntensity={0.9} toneMapped={false} />
+        </mesh>
+      ))}
+      <group ref={ball} position={[0, 2.55, 0.6]}>
+        <mesh>
+          <sphereGeometry args={[0.32, 16, 12]} />
+          <meshStandardMaterial color="#f8fafc" metalness={0.9} roughness={0.15} flatShading emissive="#c7d2fe" emissiveIntensity={0.3} />
+        </mesh>
+        <Cyl p={[0, 0.4, 0]} r={0.01} h={0.5} c="#94a3b8" />
+      </group>
+      <group ref={beams}>
+        {(
+          [
+            [-4.6, "#ff4fd8"],
+            [-1.5, "#5fd3ff"],
+            [1.5, "#ffd23f"],
+            [4.6, "#3ddc84"],
+          ] as Array<[number, string]>
+        ).map(([x, col]) => (
+          <group key={x} position={[x, WALL_H, -D / 2 + 0.4]}>
+            <mesh position={[0, -1.3, 0.6]} rotation={[0.45, 0, 0]}>
+              <coneGeometry args={[0.55, 2.6, 16, 1, true]} />
+              <meshBasicMaterial color={col} transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+      {/* lounge sofa (the hang-out spot) */}
+      <group position={[-3.1, 0, 3.3]}>
+        <Box p={[0, 0.25, 0]} s={[2.2, 0.5, 0.8]} c="#b28cff" />
+        <Box p={[0, 0.65, 0.32]} s={[2.2, 0.5, 0.16]} c="#9b72f5" />
+      </group>
+      {/* speakers on the back wall */}
+      {[-4.5, 4.5].map((x) => (
+        <group key={x} position={[x, 0, -D / 2 + 0.5]}>
+          <Box p={[0, 1, 0]} s={[0.7, 2, 0.6]} c="#1e293b" />
+          <Cyl p={[0, 0.6, 0.31]} r={0.24} h={0.02} c="#64748b" />
+          <Cyl p={[0, 1.4, 0.31]} r={0.15} h={0.02} c="#64748b" />
+        </group>
+      ))}
+    </group>
   );
 }
 
@@ -320,6 +441,7 @@ function Decor({ place }: { place: PlaceDef }) {
       </group>
     ),
     launchpad: <Glow p={[0, 0.02, 0]} s={[3, 0.02, 3]} c={c} i={0.4} />,
+    club: <ClubDecor />,
     office: (
       <group>
         {[-3.8, 3.8].map((x) => (
@@ -342,6 +464,7 @@ interface InsideSim {
   h: HouseholdView;
   target: [number, number];
   pose: Pose;
+  station?: string;
 }
 
 function PlaceSim({ sim, selected, onTap }: { sim: InsideSim; selected: boolean; onTap?: () => void }) {
@@ -362,7 +485,7 @@ function PlaceSim({ sim, selected, onTap }: { sim: InsideSim; selected: boolean;
       g.rotation.y = Math.atan2(dx, dz);
       if (pose !== "walk") setPose("walk");
     } else {
-      g.rotation.y = Math.PI;
+      g.rotation.y = sim.pose === "dance" ? 0.4 : Math.PI;
       g.position.y = sim.pose === "lie" ? 0.05 : 0;
       if (pose !== sim.pose) setPose(sim.pose);
     }
@@ -385,22 +508,29 @@ function PlaceSim({ sim, selected, onTap }: { sim: InsideSim; selected: boolean;
 }
 
 /** Who is inside a place right now, and where they stand. */
-export function simsInside(place: PlaceDef, households: HouseholdView[], now: number): InsideSim[] {
+export function simsInside(place: PlaceDef, households: HouseholdView[], now: number, waving?: Set<string>): InsideSim[] {
   const out: InsideSim[] = [];
   let idle = 0;
   for (const h of households) {
     for (const c of h.characters) {
-      const b = c.busy && c.busy.until > now ? c.busy : null;
-      const arrived = b && b.place === place.id && (b.arriveAt ?? 0) <= now;
-      if (arrived) {
-        const actionId = b!.action.split(":")[2];
+      const w = whereIs(c, now);
+      if (w.placeId !== place.id || w.arriving) continue;
+      const b = c.busy && c.busy.until > now && c.busy.place === place.id && !c.busy.action.startsWith("travel:") ? c.busy : null;
+      if (b) {
+        const actionId = b.action.split(":")[2];
         const [sx, sz] = stationSpot(place, actionId);
-        const n = out.filter((o) => o.target[0] === sx).length;
+        const n = out.filter((o) => o.station === actionId).length;
         const swim = actionId === "swim";
-        out.push({ c, h, target: [sx + (n % 2 ? 0.6 : -0.6) * Math.ceil(n / 2), sz + (swim ? 0.3 : 0.9)], pose: swim ? "lie" : "stand" });
-      } else if (!b && c.location === place.id) {
+        const dance = actionId === "dance";
+        // Dancers spread around the floor; everyone else queues beside their station.
+        const target: [number, number] = dance
+          ? [sx + ((n % 3) - 1) * 0.85, sz + (Math.floor(n / 3) - 0.5) * 0.85]
+          : [sx + (n % 2 ? 0.6 : -0.6) * Math.ceil(n / 2), sz + (swim ? 0.3 : 0.9)];
+        out.push({ c, h, target, pose: swim ? "lie" : dance ? "dance" : waving?.has(c.id) ? "wave" : "stand", station: actionId });
+      } else {
         const i = idle++;
-        out.push({ c, h, target: [-3.6 + (i % 6) * 0.9, 3.2 - Math.floor(i / 6) * 0.8], pose: "stand" });
+        // Sims just hanging around stand together at the front, where the camera can see them.
+        out.push({ c, h, target: [-0.6 + (i % 5) * 0.8, 3.3 - Math.floor(i / 5) * 0.7], pose: waving?.has(c.id) ? "wave" : "stand" });
       }
     }
   }
@@ -414,6 +544,7 @@ export function PlaceInterior({
   selectedCharId,
   onStation,
   onSimTap,
+  waving,
 }: {
   place: PlaceDef;
   households: HouseholdView[];
@@ -421,9 +552,11 @@ export function PlaceInterior({
   selectedCharId?: string | null;
   onStation: (actionId: string) => void;
   onSimTap?: (c: Character, h: HouseholdView) => void;
+  waving?: Set<string>;
 }) {
-  const sims = simsInside(place, households, now);
-  const wall = "#4b63d6";
+  const sims = simsInside(place, households, now, waving);
+  const club = place.style === "club";
+  const wall = club ? "#7c4ddb" : "#4b63d6";
   return (
     <group>
       {/* street outside */}
@@ -434,7 +567,7 @@ export function PlaceInterior({
       {/* floor */}
       <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[W, D]} />
-        <meshStandardMaterial color={place.style === "pool" ? "#e2e8f0" : "#9fb3ee"} />
+        <meshStandardMaterial color={place.style === "pool" ? "#e2e8f0" : club ? "#a58cf0" : "#9fb3ee"} />
       </mesh>
       {Array.from({ length: W - 1 }).map((_, i) => (
         <mesh key={`gx${i}`} position={[-W / 2 + 1 + i, 0.002, 0]} rotation={[-Math.PI / 2, 0, 0]}>

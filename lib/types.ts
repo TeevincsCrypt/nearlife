@@ -130,6 +130,24 @@ export interface LoggedNep245Event {
   txHash?: string;
 }
 
+/**
+ * Chat between players. Channels: "town" (everyone), "place:<placeId>" (people at that place),
+ * "dm:<householdA>|<householdB>" (two households, ids sorted).
+ */
+export interface ChatMessage {
+  id: string;
+  ts: number;
+  channel: string;
+  fromHouseholdId: string;
+  /** Sim who spoke (shown as the speaker and as a speech bubble in 3D). */
+  fromCharacterId?: string;
+  fromName: string;
+  text: string;
+  kind?: "text" | "wave" | "invite";
+  /** Invites: the place to meet at. */
+  placeId?: string;
+}
+
 export interface GameState {
   version: number;
   createdAt: number;
@@ -148,6 +166,7 @@ export interface GameState {
   worldEvent?: { id: string; startedAt: number; endsAt: number };
   /** Real NEAR transaction hashes already credited (prevents double-claiming). */
   realTxs?: string[];
+  chat?: ChatMessage[];
   stats: {
     trades: number;
     volume: number;
@@ -169,6 +188,8 @@ export interface StateSnapshot {
   stats: GameState["stats"];
   worldEvent: { id: string; startedAt: number; endsAt: number } | null;
   me: { userId: string; householdId: string | null } | null;
+  /** Town chat, place chats, and the viewer's own direct messages. */
+  chat: ChatMessage[];
   config: {
     auth: "privy" | "guest" | "privy+guest";
     storage: "redis" | "memory";

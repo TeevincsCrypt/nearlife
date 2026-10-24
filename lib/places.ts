@@ -3,7 +3,7 @@
  * plane) and do something that changes their needs and SimBucks. These are in-game tributes:
  * NEARLIFE is not affiliated with any of these projects.
  */
-import type { Needs } from "./types";
+import type { Character, Needs } from "./types";
 
 export type TravelMode = "car" | "train" | "plane";
 
@@ -30,7 +30,7 @@ export interface PlaceAction {
   help: string;
 }
 
-export type BuildingStyle = "tower" | "office" | "lab" | "hall" | "kiosk" | "pool" | "datacenter" | "store" | "exchange" | "launchpad" | "hub";
+export type BuildingStyle = "tower" | "office" | "lab" | "hall" | "kiosk" | "pool" | "datacenter" | "store" | "exchange" | "launchpad" | "hub" | "club";
 
 export interface PlaceDef {
   id: string;
@@ -44,6 +44,8 @@ export interface PlaceDef {
   height: number;
   description: string;
   url: string;
+  /** NEARLIFE's own place (not a tribute to a real project). */
+  own?: boolean;
   actions: PlaceAction[];
 }
 
@@ -216,7 +218,7 @@ export const PLACES: PlaceDef[] = [
     emoji: "📲",
     color: "#facc15",
     style: "kiosk",
-    pos: [6, 18],
+    pos: [9.5, 24],
     height: 3,
     description: "Mobile wallet kiosk. Stake a little, earn a little.",
     url: "https://www.herewallet.app",
@@ -302,6 +304,25 @@ export const PLACES: PlaceDef[] = [
   },
 ];
 
+PLACES.push({
+  id: "club",
+  name: "The 24/7 Club",
+  short: "24/7 Club",
+  emoji: "🪩",
+  color: "#ff4fd8",
+  style: "club",
+  pos: [7.5, 18.5],
+  height: 5,
+  description: "Open 24 hours, 7 days a week. Dance, grab a drink or take the decks. Everything here is better with friends: do it together for a bonus.",
+  url: "/",
+  own: true,
+  actions: [
+    { id: "dance", label: "Dance", emoji: "💃", cost: 5, durationSec: 14, effects: { fun: 35, social: 20, energy: -15 }, help: "+35 fun, +20 social, more with friends" },
+    { id: "drink", label: "Grab a mocktail", emoji: "🍹", cost: 4, durationSec: 6, effects: { hunger: 10, fun: 12, social: 5 }, help: "+12 fun, +10 hunger" },
+    { id: "dj", label: "DJ a set", emoji: "🎧", cost: 0, durationSec: 18, effects: { energy: -15, fun: 20 }, payout: [8, 30], help: "Earns 8–30 SB, bigger tips with a crowd" },
+  ],
+});
+
 // Every place has somewhere to just hang out with whoever else is there.
 for (const p of PLACES) {
   p.actions.push({
@@ -327,4 +348,23 @@ export function parsePlaceAction(id: string) {
   const place = PLACE_BY_ID[placeId];
   const action = place?.actions.find((a) => a.id === actionId);
   return place && action ? { place, action } : null;
+}
+
+export function travelActionId(placeId: string) {
+  return `travel:${placeId}`;
+}
+
+/**
+ * Where a Sim is right now: at a city place (arrived), on the way to one, or at home (null).
+ * Works on snapshots too, so a Sim that has just arrived shows up before the server catches up.
+ */
+export function whereIs(c: Character, now: number): { placeId: string | null; arriving: boolean; busy: boolean } {
+  const b = c.busy;
+  if (b && b.place) {
+    const arrived = (b.arriveAt ?? b.startedAt) <= now;
+    if (!arrived) return { placeId: b.place, arriving: true, busy: true };
+    return { placeId: b.place, arriving: false, busy: b.until > now };
+  }
+  if (b && b.until > now) return { placeId: null, arriving: false, busy: true };
+  return { placeId: c.location ?? null, arriving: false, busy: false };
 }

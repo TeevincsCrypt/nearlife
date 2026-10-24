@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
-import { useCreateWallet, useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { useCreateWallet, useExportWallet, useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { PRIVY_APP_ID, findNearWallet, guestAllowed, privyConfigured, privyDisplayName } from "@/lib/privy";
 
 export interface AuthState {
@@ -21,6 +21,15 @@ export interface AuthState {
   authHeaders: () => Promise<Record<string, string>>;
   /** Signs a 32-byte hash with the Privy NEAR wallet (ed25519). Only set when real mode is possible. */
   signNearHash: ((hash: `0x${string}`) => Promise<`0x${string}`>) | null;
+  /** Opens Privy's secure export screen for the NEAR wallet's private key. */
+  exportNearKey: (() => Promise<void>) | null;
+  /** Login methods on this account ("email", "google"), and ways to add the missing ones. */
+  linkedMethods: string[];
+  linkEmail: (() => void) | null;
+  linkGoogle: (() => void) | null;
+  /** A guest id saved on this device, even after logging in (used to carry guest progress over). */
+  savedGuestId: string | null;
+  forgetGuest: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -76,6 +85,12 @@ function GuestOnlyBridge({ children }: { children: React.ReactNode }) {
       logout: async () => g.logout(),
       authHeaders: async (): Promise<Record<string, string>> => (g.guest ? { "x-guest-id": g.guest.id } : {}),
       signNearHash: null,
+      exportNearKey: null,
+      linkedMethods: [],
+      linkEmail: null,
+      linkGoogle: null,
+      savedGuestId: g.guest?.id ?? null,
+      forgetGuest: () => {},
     }),
     [g],
   );
@@ -83,8 +98,9 @@ function GuestOnlyBridge({ children }: { children: React.ReactNode }) {
 }
 
 function PrivyBridge({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy();
+  const { ready, authenticated, user, login, logout, getAccessToken, linkEmail, linkGoogle } = usePrivy();
   const { createWallet } = useCreateWallet();
+  const { exportWallet } = useExportWallet();
   const { signRawHash } = useSignRawHash();
   const g = useGuest();
   const [nearAddress, setNearAddress] = useState<string | null>(null);
@@ -134,8 +150,18 @@ function PrivyBridge({ children }: { children: React.ReactNode }) {
         privyActive && nearAddress
           ? async (hash: `0x${string}`) => (await signRawHash({ address: nearAddress, chainType: "near", hash })).signature
           : null,
+      exportNearKey: privyActive && nearAddress ? () => exportWallet({ address: nearAddress }) : null,
+      linkedMethods: privyActive
+        ? ((user!.linkedAccounts ?? []) as Array<{ type?: string }>)
+            .map((a) => (a.type === "google_oauth" ? "google" : a.type === "email" ? "email" : ""))
+            .filter(Boolean)
+        : [],
+      linkEmail: privyActive ? linkEmail : null,
+      linkGoogle: privyActive ? linkGoogle : null,
+      savedGuestId: g.guest?.id ?? null,
+      forgetGuest: g.logout,
     };
-  }, [ready, authenticated, user, login, logout, getAccessToken, g, nearAddress, signRawHash]);
+  }, [ready, authenticated, user, login, logout, getAccessToken, g, nearAddress, signRawHash, exportWallet, linkEmail, linkGoogle]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

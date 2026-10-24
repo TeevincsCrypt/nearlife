@@ -404,10 +404,10 @@ export const WORLD_EVENTS: WorldEventDef[] = [
 
 export const WORLD_EVENT_MS = 4 * 60_000;
 
-/** 1 real second = 1 game minute, so a game day lasts 24 real minutes. */
+/** The game runs on real life time, in the player's own timezone. `day` is 0 = Monday. */
 export function gameClock(now: number) {
-  const totalMin = Math.floor(now / 1000) + 8 * 60; // offset so a fresh world starts in the morning
-  const minuteOfDay = totalMin % (24 * 60);
-  const day = Math.floor(totalMin / (24 * 60)) % 7;
-  return { hour: Math.floor(minuteOfDay / 60), minute: minuteOfDay % 60, minuteOfDay, day };
+  const d = new Date(now);
+  const hour = d.getHours();
+  const minute = d.getMinutes();
+  return { hour, minute, minuteOfDay: hour * 60 + minute, day: (d.getDay() + 6) % 7 };
 }

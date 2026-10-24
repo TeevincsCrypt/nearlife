@@ -7,11 +7,13 @@ import { PLACES, PLACE_BY_ID } from "@/lib/places";
 import type { Character, HouseholdView, NeedKey, StateSnapshot } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn, shortAccount, timeAgo } from "@/lib/utils";
-import { txUrl } from "@/lib/near-real";
+import { REAL_NETWORK, txUrl } from "@/lib/near-real";
 import { REAL_IDS, RealPanelFor } from "./RealMode";
 import { Portrait } from "./Portrait";
 import { BrandIcon, LOGOS } from "./BrandIcon";
 import { CloseButton } from "./Sheet";
+import { ChatApp, ONLINE_MS, unreadCounts, whereabouts, type ChatSeen } from "./Chat";
+import { useAuth } from "@/components/auth-provider";
 
 export type EcoId =
   | "names"
@@ -28,9 +30,10 @@ export type EcoId =
   | "intents"
   | "aurora"
   | "meme";
-export type AppId = "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "leaders" | "places" | "about" | EcoId;
+export type AppId = "chat" | "jobs" | "market" | "sell" | "bag" | "feed" | "neighbors" | "make" | "wallet" | "leaders" | "places" | "about" | EcoId;
 
 const APPS: Array<{ id: AppId; label: string; emoji: string; color: string }> = [
+  { id: "chat", label: "Chat", emoji: "💬", color: "#3ddc84" },
   { id: "market", label: "Market", emoji: "🛒", color: "#fbbf24" },
   { id: "sell", label: "Sell", emoji: "🏷️", color: "#f472b6" },
   { id: "make", label: "Make", emoji: "🍳", color: "#fb923c" },
@@ -78,6 +81,9 @@ interface Props {
   onClose: () => void;
   onSignOut: () => void;
   onPlace: (placeId: string) => void;
+  /** Open the chat app on a direct message with this household. */
+  chatWith?: string | null;
+  chat: ChatSeen;
 }
 
 function Row({ children, className }: { children: ReactNode; className?: string }) {
@@ -364,12 +370,12 @@ function FeedApp({ snapshot, me, now }: Props) {
   );
 }
 
-function NeighborsApp({ snapshot, me, now, onVisit }: Props) {
+function NeighborsApp({ snapshot, me, now, onVisit, setApp, chatWithRef }: Props & { chatWithRef?: (id: string) => void }) {
   if (snapshot.households.length <= 1) return <Row className="text-sm">You&apos;re the first one here. Share the link with friends so they can move in next door.</Row>;
   return (
     <div className="space-y-2">
       {snapshot.households.map((h) => {
-        const online = now - h.lastActive < 60_000;
+        const online = now - h.lastActive < ONLINE_MS;
         return (
           <Row key={h.id}>
             <span className="relative text-2xl">
@@ -381,9 +387,19 @@ function NeighborsApp({ snapshot, me, now, onVisit }: Props) {
                 {h.name} {h.id === me?.id && <span className="text-xs text-[#ffd23f]">(you)</span>}
               </div>
               <div className="truncate text-xs text-slate-400">
-                {online ? "online now" : `seen ${timeAgo(h.lastActive, now)}`} · {h.characters.length} Sim{h.characters.length === 1 ? "" : "s"} · {h.activeListings} listings
+                {online ? `online · ${whereabouts(h, now).text}` : `seen ${timeAgo(h.lastActive, now)}`} · {h.characters.length} Sim{h.characters.length === 1 ? "" : "s"} · {h.activeListings} listings
               </div>
             </div>
+            {h.id !== me?.id && me && (
+              <Btn
+                onClick={() => {
+                  chatWithRef?.(h.id);
+                  setApp("chat");
+                }}
+              >
+                💬
+              </Btn>
+            )}
             {h.id !== me?.id && (
               <Btn tone="ghost" onClick={() => onVisit(h.id)}>
                 Visit
@@ -492,7 +508,7 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
       .then((r) => r.json())
       .then((d) => setEvents((d.events ?? []).filter((e: { log: string }) => e.log.includes(me.accountId)).slice(0, 15)))
       .catch(() => {});
-    fetch(`/api/near/balance?account_id=${me.accountId}`)
+    fetch(`/api/near/balance?account_id=${me.accountId}&network=${me.accountSource === "privy" ? REAL_NETWORK : snapshot.config.network}`)
       .then((r) => r.json())
       .then(setNear)
       .catch(() => {});
@@ -510,18 +526,9 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
         <div className="text-[11px] break-all text-slate-400">
           {me.accountSource === "privy" ? "Privy embedded NEAR wallet" : "NEAR implicit account"} {shortAccount(me.accountId)}
         </div>
-        <div className="text-[11px] text-slate-400">
-          Native NEAR:{" "}
-          {near?.explorer ? (
-            <a href={near.explorer} target="_blank" rel="noreferrer" className="text-[#ffd23f] underline">
-              {near.error ? "RPC unavailable" : near.exists ? `${near.near} NEAR` : "0 (not funded yet)"} ↗
-            </a>
-          ) : (
-            "…"
-          )}
-          {(me.debt ?? 0) > 0 && <span className="ml-2 text-amber-300">· Burrow loan {me.debt} SB</span>}
-        </div>
+        {(me.debt ?? 0) > 0 && <div className="text-[11px] text-amber-300">Burrow loan {me.debt} SB</div>}
       </Row>
+      <NearAccountCard me={me} near={near} network={me.accountSource === "privy" ? REAL_NETWORK : snapshot.config.network} toast={toast} />
       <RealPanelFor id="wallet" />
       <div className="px-1 pt-1 font-mono text-[10px] font-bold tracking-widest text-slate-500">IN-GAME SIMBUCKS</div>
       <div className="grid grid-cols-3 gap-1.5">
@@ -613,6 +620,99 @@ function WalletApp({ snapshot, me, now, act, toast }: Props) {
         </>
       )}
     </div>
+  );
+}
+
+/** The player's own NEAR account: address, whether it's activated on-chain, and key export. */
+function NearAccountCard({
+  me,
+  near,
+  network,
+  toast,
+}: {
+  me: HouseholdView;
+  near: { near?: string; exists?: boolean; error?: string; explorer?: string } | null;
+  network: string;
+  toast: Props["toast"];
+}) {
+  const auth = useAuth();
+  const [exporting, setExporting] = useState(false);
+  const ownWallet = me.accountSource === "privy" && auth.nearAddress === me.accountId;
+  const status = !near ? "Checking…" : near.error ? "NEAR RPC unavailable right now" : near.exists ? `${near.near} NEAR` : "Not activated yet";
+  return (
+    <Row className="flex-col items-stretch gap-2">
+      <div className="flex items-center justify-between">
+        <span className="font-display text-base text-stroke">YOUR NEAR ACCOUNT</span>
+        <span className="rounded-md bg-[#0d1b5e]/50 px-1.5 py-0.5 text-[10px] font-black text-[#cfe0ff] uppercase">{network}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <code className="min-w-0 flex-1 truncate rounded-lg bg-[#0d1b5e]/40 px-2 py-1.5 font-mono text-[11px] text-white">{me.accountId}</code>
+        <Btn
+          tone="ghost"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(me.accountId);
+              toast("Address copied", "success");
+            } catch {
+              toast("Couldn't copy, long-press the address instead", "error");
+            }
+          }}
+        >
+          Copy
+        </Btn>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-[#cfe0ff]">On-chain balance</span>
+        {near?.explorer ? (
+          <a href={near.explorer} target="_blank" rel="noreferrer" className="font-display text-[#ffd23f] underline">
+            {status} ↗
+          </a>
+        ) : (
+          <span className="font-display text-[#ffd23f]">{status}</span>
+        )}
+      </div>
+      {near && !near.error && !near.exists && (
+        <div className="rounded-xl border-2 border-[#ffd23f]/60 bg-[#0d1b5e]/40 p-2.5 text-xs leading-relaxed text-white">
+          <b>Why &quot;not activated&quot;?</b> This is a NEAR implicit account. It already belongs to you, but it only shows up on-chain the first time it receives
+          NEAR. Send at least 0.01 NEAR to the address above (from an exchange or any NEAR wallet) to activate it. Your SimBucks and items work in the game either way.
+        </div>
+      )}
+      {ownWallet && auth.exportNearKey ? (
+        <Btn
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              await auth.exportNearKey!();
+            } catch (e) {
+              toast((e as Error).message || "Export failed", "error");
+            }
+            setExporting(false);
+          }}
+        >
+          🔑 Export private key
+        </Btn>
+      ) : auth.method === "guest" ? (
+        <div className="text-xs text-[#cfe0ff]">
+          Guest accounts are held by the game server, so their key can&apos;t be exported.{" "}
+          {auth.privyAvailable ? (
+            <>
+              <button onClick={auth.login} className="font-bold text-[#ffd23f] underline">
+                Log in with email or Google
+              </button>{" "}
+              to get your own wallet with an exportable key. Your guest progress comes with you.
+            </>
+          ) : (
+            "Email and Google login (with your own exportable wallet) turn on once the game's Privy app is set up."
+          )}
+        </div>
+      ) : me.accountSource === "derived" ? (
+        <div className="text-xs text-[#cfe0ff]">Setting up your own wallet… your household moves onto it automatically once it&apos;s ready.</div>
+      ) : (
+        <div className="text-xs text-[#cfe0ff]">This household&apos;s wallet belongs to another member. Only they can export its key.</div>
+      )}
+      {ownWallet && <div className="text-[10px] text-[#9fb6ff]">Your key is shown in Privy&apos;s secure window. NEARLIFE never sees it. Never share it with anyone.</div>}
+    </Row>
   );
 }
 
@@ -829,9 +929,53 @@ function PlacesApp({ now, snapshot, onPlace }: Props) {
   );
 }
 
+function AccountSection({ snapshot }: { snapshot: StateSnapshot }) {
+  const auth = useAuth();
+  const local = typeof window !== "undefined" && /^(localhost|127\.|0\.0\.0\.0)/.test(window.location.hostname);
+  return (
+    <Row className="flex-col items-start gap-2">
+      <div className="font-display text-base text-stroke">YOUR ACCOUNT</div>
+      {auth.method === "guest" ? (
+        <>
+          <div className="text-xs text-[#cfe0ff]">You&apos;re playing as a guest, so your progress is saved on this device only.</div>
+          {auth.privyAvailable && <Btn onClick={auth.login}>Log in to keep your progress everywhere</Btn>}
+        </>
+      ) : (
+        <>
+          <div className="text-xs text-[#cfe0ff]">
+            Signed in with {auth.linkedMethods.length ? auth.linkedMethods.join(" + ") : "Privy"}. Log in the same way on any device and you&apos;ll be right where you
+            left off.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {!auth.linkedMethods.includes("google") && auth.linkGoogle && (
+              <Btn tone="ghost" onClick={auth.linkGoogle}>
+                + Add Google login
+              </Btn>
+            )}
+            {!auth.linkedMethods.includes("email") && auth.linkEmail && (
+              <Btn tone="ghost" onClick={auth.linkEmail}>
+                + Add email login
+              </Btn>
+            )}
+          </div>
+          {auth.linkedMethods.length < 2 && (
+            <div className="text-[11px] text-[#9fb6ff]">Add both so you land in the same household whichever one you use.</div>
+          )}
+        </>
+      )}
+      {snapshot.config.storage === "memory" && !local && (
+        <div className="rounded-xl border-2 border-[#0d1b5e] bg-[#ff5a6e]/30 p-2 text-xs text-white">
+          ⚠️ This server has no database connected, so the world resets whenever it restarts. The owner needs to add Upstash Redis (see the README).
+        </div>
+      )}
+    </Row>
+  );
+}
+
 function AboutApp({ snapshot, onSignOut }: Props) {
   return (
     <div className="space-y-2 text-sm">
+      <AccountSection snapshot={snapshot} />
       <Row className="flex-col items-start">
         <div className="font-bold text-white">How to play</div>
         <ol className="list-decimal space-y-1 pl-4 text-slate-300">
@@ -841,7 +985,10 @@ function AboutApp({ snapshot, onSignOut }: Props) {
           <li>🏷️ Sell → list them for other players to buy.</li>
           <li>🛠 Build → furnish your home to unlock more ways to earn.</li>
           <li>🌆 City → visit neighbors and see what everyone is up to.</li>
-          <li>🗺️ Go Out → take a car, train or plane to Ref Finance, Burrow, OutLayer, meme.cooking and more.</li>
+          <li>🗺️ Tap a place in the city (or Go Out) → pick car, train or plane → once you arrive, go inside.</li>
+          <li>💬 Chat → talk to the whole town, to everyone at the place you&apos;re at, or message a neighbor and invite them somewhere.</li>
+          <li>👥 Tap another player&apos;s Sim to wave or message them. Doing an activity at the same place as other players gives a together bonus.</li>
+          <li>🪩 The 24/7 Club never closes: dance, grab a mocktail or DJ a set.</li>
         </ol>
       </Row>
       <Row className="flex-col items-start">
@@ -865,6 +1012,7 @@ function AboutApp({ snapshot, onSignOut }: Props) {
 }
 
 const SCREENS: Record<AppId, (p: Props) => ReactNode> = {
+  chat: (p) => <ChatApp {...p} chat={p.chat} chatWith={p.chatWith} />,
   jobs: JobsApp,
   market: MarketApp,
   sell: SellApp,
@@ -892,7 +1040,7 @@ const SCREENS: Record<AppId, (p: Props) => ReactNode> = {
   meme: makeEcoApp("meme"),
 };
 
-function AppIcon({ emoji, label, color, onClick, featured, logo }: { emoji: string; label: string; color: string; onClick: () => void; featured?: boolean; logo?: string }) {
+function AppIcon({ emoji, label, color, onClick, featured, logo, badge }: { emoji: string; label: string; color: string; onClick: () => void; featured?: boolean; logo?: string; badge?: number }) {
   const src = logo ? LOGOS[logo] : undefined;
   return (
     <button onClick={onClick} className="flex cursor-pointer flex-col items-center gap-1 active:scale-90">
@@ -913,6 +1061,11 @@ function AppIcon({ emoji, label, color, onClick, featured, logo }: { emoji: stri
         {featured && (
           <span className="font-display absolute -top-2 -right-2 rounded-md border-2 border-[#7a3d00] bg-[#ffd23f] px-1 text-[9px] leading-tight text-[#7a3d00]">REAL</span>
         )}
+        {!!badge && (
+          <span className="font-display absolute -top-2 -right-2 min-w-5 rounded-full border-2 border-[#0d1b5e] bg-[#ff5a6e] px-1 text-center text-[11px] leading-4 text-white">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
       </span>
       <span className="font-display w-full truncate text-center text-[11px] text-stroke">{label}</span>
     </button>
@@ -925,6 +1078,9 @@ export function Phone(props: Props) {
   const clock = gameClock(now);
   const meta = APPS.find((a) => a.id === app) ?? (app !== "home" && app in ECO ? ECO[app as EcoId | "wallet"] : undefined);
   const Screen = app !== "home" ? SCREENS[app] : null;
+  const unread = unreadCounts(props.snapshot.chat, me, now, props.chat.seen).total;
+  const [dmTarget, setDmTarget] = useState<string | null>(props.chatWith ?? null);
+  const screenProps = { ...props, chatWith: dmTarget ?? props.chatWith, chatWithRef: setDmTarget };
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-50 flex items-end justify-center bg-black/55 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
@@ -972,7 +1128,7 @@ export function Phone(props: Props) {
               <div className="font-display mb-2 text-base text-stroke">NEARLIFE</div>
               <div className="grid grid-cols-5 gap-x-1.5 gap-y-4">
                 {APPS.map((a) => (
-                  <AppIcon key={a.id} emoji={a.emoji} label={a.label} color={a.color} onClick={() => setApp(a.id)} />
+                  <AppIcon key={a.id} emoji={a.emoji} label={a.label} color={a.color} onClick={() => setApp(a.id)} badge={a.id === "chat" ? unread : undefined} />
                 ))}
               </div>
               <div className="mt-5 mb-2 flex items-center justify-between">
@@ -996,7 +1152,9 @@ export function Phone(props: Props) {
               </button>
             </div>
           ) : (
-            <div className="relative min-h-0 flex-1 overflow-y-auto px-3 pb-6">{Screen && <Screen {...props} />}</div>
+            <div className={cn("relative min-h-0 flex-1 px-3", app === "chat" ? "flex flex-col pb-3" : "overflow-y-auto pb-6")}>
+              {app === "neighbors" ? <NeighborsApp {...screenProps} /> : Screen && <Screen key={app === "chat" ? dmTarget ?? "chat" : app} {...screenProps} />}
+            </div>
           )}
         </div>
       </div>

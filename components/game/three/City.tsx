@@ -285,6 +285,71 @@ function TradeScreen({ text }: { text: string }) {
   );
 }
 
+/** "24/7 CLUB" neon sign drawn into a texture. */
+function ClubSign() {
+  const tex = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 192;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#2a0f5c";
+    ctx.fillRect(0, 0, 512, 192);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#ff4fd8";
+    ctx.shadowBlur = 28;
+    ctx.fillStyle = "#ff8be8";
+    ctx.font = "900 112px system-ui, sans-serif";
+    ctx.fillText("24/7", 256, 82);
+    ctx.shadowColor = "#5fd3ff";
+    ctx.fillStyle = "#bdf0ff";
+    ctx.font = "900 44px system-ui, sans-serif";
+    ctx.fillText("C L U B", 256, 158);
+    const t = new CanvasTexture(canvas);
+    t.colorSpace = SRGBColorSpace;
+    return t;
+  }, []);
+  return (
+    <mesh>
+      <planeGeometry args={[3.4, 1.28]} />
+      <meshBasicMaterial map={tex} toneMapped={false} />
+    </mesh>
+  );
+}
+
+/** Two light beams sweeping the sky above the club. */
+function ClubBeams({ h }: { h: number }) {
+  const ref = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    const t = clock.elapsedTime;
+    ref.current?.children.forEach((b, i) => {
+      b.rotation.z = Math.sin(t * 0.9 + i * 2) * 0.55;
+      b.rotation.x = Math.cos(t * 0.7 + i) * 0.3;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {(
+        [
+          [-1.2, "#ff4fd8"],
+          [1.2, "#5fd3ff"],
+        ] as Array<[number, string]>
+      ).map(([x, col]) => (
+        <group key={x} position={[x, h + 0.2, 0]}>
+          <mesh position={[0, 4, 0]}>
+            <coneGeometry args={[0.9, 8, 16, 1, true]} />
+            <meshBasicMaterial color={col} transparent opacity={0.18} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <mesh>
+            <cylinderGeometry args={[0.25, 0.3, 0.3, 12]} />
+            <meshStandardMaterial color="#1e293b" />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 /** Building for a named ecosystem place, styled by type, with a neon roof sign. */
 function PlaceBuilding({ place }: { place: PlaceDef }) {
   const c = place.color;
@@ -437,6 +502,40 @@ function PlaceBuilding({ place }: { place: PlaceDef }) {
           <meshStandardMaterial color={c} emissive={c} emissiveIntensity={0.8} />
         </mesh>
         <Glow p={[0, 0.62, 0]} s={[3.2, 0.02, 3.2]} c={c} i={0.6} />
+      </>
+    ),
+    club: (
+      <>
+        {pad(6.4, 5.4, "#c4b5fd")}
+        {body(4.4, 3.4, h, "#7c3aed")}
+        {[0.9, 1.9, 2.9, 3.9].filter((y) => y < h).map((y, i) => (
+          <Glow key={y} p={[0, y, 1.71]} s={[4.4, 0.08, 0.02]} c={i % 2 ? "#5fd3ff" : "#ff4fd8"} i={1.4} />
+        ))}
+        <group position={[0, h - 0.95, 1.73]}>
+          <ClubSign />
+        </group>
+        {/* door, red carpet and velvet rope */}
+        <mesh position={[0, 0.85, 1.72]}>
+          <planeGeometry args={[1.1, 1.7]} />
+          <meshStandardMaterial color="#1e1b4b" emissive="#ff4fd8" emissiveIntensity={0.25} />
+        </mesh>
+        <mesh position={[0, 0.03, 2.5]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.1, 1.6]} />
+          <meshStandardMaterial color="#e11d48" />
+        </mesh>
+        {[-0.9, 0.9].map((x) => (
+          <group key={x} position={[x, 0, 2.6]}>
+            <mesh position={[0, 0.4, 0]}>
+              <cylinderGeometry args={[0.05, 0.07, 0.8, 10]} />
+              <meshStandardMaterial color="#fbbf24" metalness={0.6} roughness={0.3} />
+            </mesh>
+            <mesh position={[0, 0.82, 0]}>
+              <sphereGeometry args={[0.08, 10, 8]} />
+              <meshStandardMaterial color="#fbbf24" metalness={0.6} roughness={0.3} />
+            </mesh>
+          </group>
+        ))}
+        <ClubBeams h={h} />
       </>
     ),
     hub: (

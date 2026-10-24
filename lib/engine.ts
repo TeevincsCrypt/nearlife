@@ -4,9 +4,10 @@
  */
 import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS, WORLD_EVENTS, WORLD_EVENT_MS, type WorldEventDef } from "./catalog";
 import { FLOOR_COLORS, WALL_COLORS, canPlace, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
-import { BURROW_LOAN, BURROW_REPAY, PLACE_BY_ID, TRAVEL, parsePlaceAction, placeActionId, type TravelMode } from "./places";
+import { BURROW_LOAN, BURROW_REPAY, PLACE_BY_ID, TRAVEL, parsePlaceAction, placeActionId, travelActionId, whereIs, type TravelMode } from "./places";
+import { TOWN, cleanChatText, dmChannel, dmMembers, placeChannel } from "./chat";
 import { ESCROW_ACCOUNT, LedgerError, inventoryOf, mt_balance_of, mt_burn, mt_mint, mt_transfer } from "./nep245";
-import type { ActivityEvent, Character, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
+import type { ActivityEvent, Character, ChatMessage, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
 import { NEED_KEYS } from "./types";
 
 const MAX_CATCHUP_MS = 10 * 60_000;
@@ -115,6 +116,11 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
   const busy = c.busy;
   c.busy = null;
   if (!busy) return;
+  if (busy.action.startsWith("travel:")) {
+    // Arrived: the Sim is now at the place and can go inside.
+    c.location = busy.place ?? null;
+    return;
+  }
   const trip = parsePlaceAction(busy.action);
   if (trip) return completePlaceAction(state, hh, c, trip.place.id, trip.action.id, now);
   const action = ACTIONS[busy.action];
@@ -228,16 +234,76 @@ export function startPlaceAction(state: GameState, hh: Household, c: Character, 
   });
 }
 
+/** Take the car, train or plane to a city place. On arrival the Sim is there and can go inside. */
+export function travelTo(state: GameState, hh: Household, c: Character, placeId: string, mode: TravelMode, now: number) {
+  const place = PLACE_BY_ID[placeId];
+  const travel = TRAVEL[mode];
+  if (!place) throw new GameError("Unknown place");
+  if (!travel) throw new GameError("Pick car, train or plane");
+  if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  if (whereIs(c, now).placeId === placeId) throw new GameError(`${c.name} is already at ${place.short}`);
+  if (balanceOf(state, hh) < travel.cost) throw new GameError(`Need ${travel.cost} ${CURRENCY_SYMBOL} for the ${travel.label.toLowerCase()}`);
+  if (travel.cost) mt_burn(state, hh.accountId, CURRENCY, travel.cost, `travel:${mode}`);
+  applyEffects(c, travel.effects);
+  const arriveAt = now + travel.seconds * 1000;
+  c.location = null;
+  c.busy = {
+    action: travelActionId(place.id),
+    label: `on the way to ${place.short}`,
+    startedAt: now,
+    arriveAt,
+    until: arriveAt,
+    place: place.id,
+    travel: mode,
+  };
+  hh.lastActive = now;
+  addActivity(state, {
+    ...who(hh),
+    ts: now,
+    type: "action",
+    emoji: travel.emoji,
+    text: `${c.name} (${hh.name}) took the ${travel.label.toLowerCase()} to ${place.name}`,
+  });
+}
+
+/** Sims from other households who are at a place right now (not still on the way). */
+export function companionsAt(state: GameState, placeId: string, exceptHouseholdId: string, now: number) {
+  const out: Array<{ hh: Household; c: Character }> = [];
+  for (const hh of Object.values(state.households)) {
+    if (hh.id === exceptHouseholdId) continue;
+    for (const c of hh.characters) {
+      const w = whereIs(c, now);
+      if (w.placeId === placeId && !w.arriving) out.push({ hh, c });
+    }
+  }
+  return out;
+}
+
+const names = (list: Array<{ c: Character }>) => {
+  const n = list.map((x) => x.c.name);
+  return n.length <= 1 ? n.join("") : `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}`;
+};
+
 function completePlaceAction(state: GameState, hh: Household, c: Character, placeId: string, actionId: string, now: number) {
   const place = PLACE_BY_ID[placeId];
   const action = place.actions.find((a) => a.id === actionId)!;
   applyEffects(c, action.effects);
   c.location = place.id;
-  if (action.id === "hang") return;
+  // Doing things together: every other player here adds a bonus (up to three of them).
+  const friends = companionsAt(state, place.id, hh.id, now).slice(0, 3);
+  const n = friends.length;
+  if (n) applyEffects(c, { social: 8 * n, fun: 4 * n });
+  const together = n ? ` with ${names(friends)}` : "";
+  if (action.id === "hang") {
+    if (n) {
+      addActivity(state, { ...who(hh), ts: now, type: "social", emoji: "🥤", text: `${c.name} (${hh.name}) hung out${together} at ${place.name}` });
+    }
+    return;
+  }
   let result = "";
   if (action.payout) {
     const [lo, hi] = action.payout;
-    const amount = Math.round(lo + Math.random() * (hi - lo));
+    const amount = Math.round((lo + Math.random() * (hi - lo)) * (1 + 0.15 * n));
     if (amount > 0) mt_mint(state, hh.accountId, CURRENCY, amount, `place:${place.id}:${action.id}`);
     const net = amount - action.cost;
     result = action.cost ? ` (${net >= 0 ? "+" : ""}${net} ${CURRENCY_SYMBOL} net)` : ` (+${amount} ${CURRENCY_SYMBOL})`;
@@ -250,7 +316,7 @@ function completePlaceAction(state: GameState, hh: Household, c: Character, plac
     ts: now,
     type: "action",
     emoji: place.emoji,
-    text: `${c.name} (${hh.name}) ${action.emoji} ${lcFirst(action.label)} at ${place.name}${result}`,
+    text: `${c.name} (${hh.name}) ${action.emoji} ${lcFirst(action.label)}${together} at ${place.name}${result}`,
   });
 }
 
@@ -475,6 +541,119 @@ export function topUp(state: GameState, hh: Household, now: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Chat and meeting other players
+// ---------------------------------------------------------------------------
+
+const CHAT_CAP = 400;
+
+function pushChat(state: GameState, msg: Omit<ChatMessage, "id">) {
+  state.chat ??= [];
+  const full: ChatMessage = { id: uid("msg"), ...msg };
+  state.chat.push(full);
+  if (state.chat.length > CHAT_CAP) state.chat.splice(0, state.chat.length - CHAT_CAP);
+  return full;
+}
+
+function rateLimit(state: GameState, hh: Household, now: number) {
+  const mine = (state.chat ?? []).filter((m) => m.fromHouseholdId === hh.id && now - m.ts < 10_000);
+  if (mine.length && now - mine[mine.length - 1].ts < 700) throw new GameError("Slow down a little");
+  if (mine.length >= 8) throw new GameError("Too many messages, take a breath");
+}
+
+/** Is one of this household's Sims at the place (arrived)? Returns that Sim. */
+function simAt(hh: Household, placeId: string, now: number, preferId?: string) {
+  const here = hh.characters.filter((c) => {
+    const w = whereIs(c, now);
+    return w.placeId === placeId && !w.arriving;
+  });
+  return here.find((c) => c.id === preferId) ?? here[0];
+}
+
+/**
+ * Post a chat message. Town chat is open to everyone in town, place chat needs one of your
+ * Sims to be there, and direct messages go between two households.
+ */
+export function postChat(state: GameState, hh: Household, channel: string, rawText: string, now: number, characterId?: string) {
+  const text = cleanChatText(rawText);
+  if (!text) throw new GameError("Say something first");
+  rateLimit(state, hh, now);
+  let speaker = hh.characters.find((c) => c.id === characterId) ?? hh.characters[0];
+  if (channel === TOWN) {
+    // open to everyone
+  } else if (channel.startsWith("place:")) {
+    const placeId = channel.slice(6);
+    if (!PLACE_BY_ID[placeId]) throw new GameError("Unknown place");
+    const here = simAt(hh, placeId, now, characterId);
+    if (!here) throw new GameError(`Go to ${PLACE_BY_ID[placeId].short} first to talk to people there`);
+    speaker = here;
+  } else {
+    const members = dmMembers(channel);
+    if (!members || !members.includes(hh.id)) throw new GameError("Unknown chat");
+    const other = members[0] === hh.id ? members[1] : members[0];
+    if (!state.households[other] || other === hh.id) throw new GameError("That neighbor moved away");
+    channel = dmChannel(hh.id, other);
+  }
+  hh.lastActive = now;
+  return pushChat(state, { ts: now, channel, fromHouseholdId: hh.id, fromCharacterId: speaker?.id, fromName: speaker?.name ?? hh.name, text, kind: "text" });
+}
+
+/** Wave at another player's Sim at the same place: a little social boost for both. */
+export function waveAt(state: GameState, hh: Household, targetCharacterId: string, now: number, characterId?: string) {
+  const target = Object.values(state.households)
+    .filter((h) => h.id !== hh.id)
+    .flatMap((h) => h.characters.map((c) => ({ h, c })))
+    .find((x) => x.c.id === targetCharacterId);
+  if (!target) throw new GameError("They're not here any more");
+  const placeId = whereIs(target.c, now).placeId;
+  if (!placeId) throw new GameError(`${target.c.name} isn't out right now`);
+  const me = simAt(hh, placeId, now, characterId);
+  if (!me) throw new GameError(`Go to ${PLACE_BY_ID[placeId]?.short ?? "them"} first`);
+  rateLimit(state, hh, now);
+  applyEffects(me, { social: 6 });
+  applyEffects(target.c, { social: 6 });
+  hh.lastActive = now;
+  return pushChat(state, {
+    ts: now,
+    channel: placeChannel(placeId),
+    fromHouseholdId: hh.id,
+    fromCharacterId: me.id,
+    fromName: me.name,
+    text: `👋 waved at ${target.c.name}`,
+    kind: "wave",
+  });
+}
+
+/** Invite a neighbor to meet at a place (sent as a direct message with a "Go there" button). */
+export function inviteTo(state: GameState, hh: Household, toHouseholdId: string, placeId: string, now: number, characterId?: string) {
+  const to = state.households[toHouseholdId];
+  const place = PLACE_BY_ID[placeId];
+  if (!to || to.id === hh.id) throw new GameError("Pick a neighbor to invite");
+  if (!place) throw new GameError("Unknown place");
+  rateLimit(state, hh, now);
+  const speaker = hh.characters.find((c) => c.id === characterId) ?? hh.characters[0];
+  hh.lastActive = now;
+  return pushChat(state, {
+    ts: now,
+    channel: dmChannel(hh.id, to.id),
+    fromHouseholdId: hh.id,
+    fromCharacterId: speaker?.id,
+    fromName: speaker?.name ?? hh.name,
+    text: `Meet me at ${place.name}? ${place.emoji}`,
+    kind: "invite",
+    placeId,
+  });
+}
+
+/** Messages a viewer can see: town chat, place chats, and their own direct messages. */
+export function visibleChat(state: GameState, householdId: string | null) {
+  const all = state.chat ?? [];
+  const town = all.filter((m) => m.channel === TOWN).slice(-80);
+  const places = all.filter((m) => m.channel.startsWith("place:")).slice(-100);
+  const dms = householdId ? all.filter((m) => dmMembers(m.channel)?.includes(householdId)).slice(-120) : [];
+  return [...town, ...places, ...dms].sort((a, b) => a.ts - b.ts);
+}
+
+// ---------------------------------------------------------------------------
 // Time
 // ---------------------------------------------------------------------------
 
@@ -510,6 +689,7 @@ function migrate(state: GameState, now: number) {
     }
   }
   if (!state.worldEvent) state.worldEvent = { id: "calm", startedAt: now, endsAt: now + WORLD_EVENT_MS };
+  state.chat ??= [];
 }
 
 function rotateWorldEvent(state: GameState, now: number) {
@@ -581,6 +761,7 @@ export function snapshot(
     stats: { trades: state.stats.trades, volume: state.stats.volume },
     worldEvent: state.worldEvent ?? null,
     me: userId ? { userId, householdId: state.players[userId] ?? null } : null,
+    chat: visibleChat(state, userId ? (state.players[userId] ?? null) : null),
     config,
   };
 }

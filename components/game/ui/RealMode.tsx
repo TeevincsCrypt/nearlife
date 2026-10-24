@@ -185,7 +185,7 @@ export function RealWalletPanel() {
   useEffect(() => {
     if (!real.accountId) return;
     realBalance(real.accountId)
-      .then((b) => setBal(b === null ? "0 (account not on-chain yet)" : `${yoctoToNear(b)} NEAR`))
+      .then((b) => setBal(b === null ? "0 NEAR · not activated yet (send NEAR to it to activate)" : `${yoctoToNear(b)} NEAR`))
       .catch(() => setBal("RPC unavailable"));
   }, [real.accountId]);
   return (

@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 import type { CharacterLook } from "@/lib/types";
 
-export type Pose = "stand" | "walk" | "sit" | "lie";
+export type Pose = "stand" | "walk" | "sit" | "lie" | "dance" | "wave";
 
 const DEFAULT_LOOK: CharacterLook = { skin: "#c68a62", hair: "#1c1917", hairStyle: "short", top: "#3b82f6", bottom: "#1f2937" };
 
@@ -98,8 +98,30 @@ export function Character3D({ look = DEFAULT_LOOK, pose = "stand" }: { look?: Ch
     set(elL.current, sit ? -0.6 : walking ? -0.35 : -0.12);
     set(elR.current, sit ? -0.6 : walking ? -0.35 : -0.12);
     if (body.current) body.current.position.y = walking ? Math.abs(Math.cos(t * 8)) * 0.025 : 0;
+    if (body.current) body.current.rotation.y = 0;
     if (head.current) head.current.rotation.y = pose === "stand" ? Math.sin(t * 0.6) * 0.25 : 0;
     if (head.current) head.current.rotation.x = pose === "stand" ? Math.sin(t * 1.3) * 0.03 : 0;
+    if (pose === "dance") {
+      // Bounce on the beat with arms up, hips swaying side to side.
+      const beat = Math.sin(t * 9);
+      const sway = Math.sin(t * 4.5);
+      set(hipL.current, sway * 0.25);
+      set(hipR.current, -sway * 0.25);
+      set(kneeL.current, Math.max(0, beat) * 0.4);
+      set(kneeR.current, Math.max(0, -beat) * 0.4);
+      set(shL.current, -2.5 + Math.sin(t * 9) * 0.35);
+      set(shR.current, -2.5 + Math.sin(t * 9 + Math.PI) * 0.35);
+      set(elL.current, -0.55);
+      set(elR.current, -0.55);
+      if (body.current) {
+        body.current.position.y = Math.abs(beat) * 0.06;
+        body.current.rotation.y = sway * 0.35;
+      }
+      if (head.current) head.current.rotation.x = Math.abs(beat) * 0.12;
+    } else if (pose === "wave") {
+      set(shR.current, -2.75);
+      set(elR.current, -0.35 + Math.sin(t * 12) * 0.45);
+    }
   });
 
   const rootRotation: [number, number, number] = pose === "lie" ? [-Math.PI / 2, 0, 0] : [0, 0, 0];
