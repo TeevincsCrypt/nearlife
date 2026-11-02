@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
+import { AD_SLOTS, type LiveAd } from "@/lib/ad-slots";
 import { useAuth } from "@/components/auth-provider";
 import { useToast } from "@/components/toaster";
 import { useGame } from "@/hooks/use-game";
@@ -10,8 +12,8 @@ import type { PlacedFurniture } from "@/lib/types";
 import { NEED_KEYS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Projector } from "./three/anchors";
-import { PLACE_BY_ID, TRAVEL, whereIs } from "@/lib/places";
-import { dmPartner } from "@/lib/chat";
+import { PLACE_BY_ID, TRAVEL, homeOwner, homeSpot, isAtSpot, spotName, whereIs, type TravelMode } from "@/lib/places";
+import { dmPartner, placeChannel } from "@/lib/chat";
 import type { Character, HouseholdView } from "@/lib/types";
 import { City, housePosition, type Landmark, type Trip } from "./three/City";
 import { PlaceSheet } from "./ui/PlaceSheet";
@@ -29,7 +31,8 @@ import { NeedsSheet, needColor } from "./ui/NeedsSheet";
 import { Phone, type AppId } from "./ui/Phone";
 import { Portrait } from "./ui/Portrait";
 import { GlassButton, Sheet } from "./ui/Sheet";
-import { ONLINE_MS, unreadCounts, useChatSeen, whereabouts } from "./ui/Chat";
+import { ChatInput, ONLINE_MS, unreadCounts, useChatSeen, whereabouts } from "./ui/Chat";
+import { CallManager, startCall } from "./ui/Call";
 import { TopUpSheet } from "./ui/TopUpSheet";
 import { Welcome } from "./ui/Welcome";
 
@@ -88,6 +91,11 @@ export default function Game() {
   const [arrival, setArrival] = useState<{ placeId: string; charId: string } | null>(null);
   const [simMenu, setSimMenu] = useState<{ c: Character; h: HouseholdView } | null>(null);
   const [chatWith, setChatWith] = useState<string | null>(null);
+  const [homeSheet, setHomeSheet] = useState<string | null>(null);
+  const [rideMode, setRideMode] = useState<TravelMode>("car");
+  const [adSlot, setAdSlot] = useState<string | null>(null);
+  const { data: adsData } = useSWR<{ live: LiveAd[] }>("/api/ads", (u: string) => fetch(u).then((r) => r.json()), { refreshInterval: 60_000 });
+  const liveAds = adsData?.live ?? [];
   const chat = useChatSeen();
 
   const me = myHousehold;
@@ -112,14 +120,20 @@ export default function Game() {
       return;
     }
     if (w.arriving) return;
-    const place = PLACE_BY_ID[arrival.placeId];
-    toast(`📍 ${c.name} arrived at ${place.short}`, "success");
+    const host = homeOwner(arrival.placeId);
+    toast(`📍 ${c.name} arrived at ${spotName(arrival.placeId, snapshot?.households ?? [])}`, "success");
     setArrival(null);
-    if (!(view === "place" && insideId === place.id)) {
-      setSheet(null);
-      setPlaceId(place.id);
+    if (host) {
+      // Walk straight in to the neighbor's home.
+      setVisitId(host);
+      goto("visit");
+      return;
     }
-  }, [arrival, me, now, view, insideId, toast]);
+    if (!(view === "place" && insideId === arrival.placeId)) {
+      setSheet(null);
+      setPlaceId(arrival.placeId);
+    }
+  }, [arrival, me, now, view, insideId, toast, snapshot?.households]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pop up direct messages and invites from other players as they arrive.
   const seenMsg = useRef<number | null>(null);
@@ -171,6 +185,19 @@ export default function Game() {
     }
   }, [auth, snapshot?.me, me, act, refresh, toast]);
 
+  // Count each running ad as viewed once per session when the city is on screen.
+  useEffect(() => {
+    if (effectiveView !== "map") return;
+    for (const ad of liveAds) {
+      const key = `nearlife:ad-seen:${ad.id}`;
+      try {
+        if (sessionStorage.getItem(key)) continue;
+        sessionStorage.setItem(key, "1");
+      } catch {}
+      void fetch(`/api/ads/${ad.id}/event`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "view" }) });
+    }
+  }, [effectiveView, liveAds]);
+
   // Tell the owner (once) when the server isn't saving the world anywhere.
   const warned = useRef(false);
   useEffect(() => {
@@ -187,18 +214,20 @@ export default function Game() {
       if (!from) continue;
       for (const c of h.characters) {
         const b = c.busy;
-        const place = b?.place ? PLACE_BY_ID[b.place] : undefined;
-        if (!b || !place || b.until <= snapshot.now) continue;
+        if (!b?.place || b.until <= snapshot.now) continue;
+        const host = homeOwner(b.place);
+        const to = host ? housePosition(snapshot.households, host) : PLACE_BY_ID[b.place]?.pos;
+        if (!to) continue;
         out.push({
           id: c.id,
           mode: b.travel ?? "car",
           from,
-          to: place.pos,
+          to,
           start: b.startedAt,
           arrive: b.arriveAt ?? b.startedAt,
           until: b.until,
           color: h.color,
-          label: `${c.name} → ${place.short}`,
+          label: `${c.name} → ${spotName(b.place, snapshot.households)}`,
         });
       }
     }
@@ -225,6 +254,16 @@ export default function Game() {
     if (id === me?.id) return goto("home");
     setVisitId(id);
     goto("visit");
+  }
+
+  /** Open the right "get there" sheet for a city place or a player's home. */
+  function goToSpot(id: string | null) {
+    if (!id) return;
+    const host = homeOwner(id);
+    setSheet(null);
+    if (!host) return setPlaceId(id);
+    if (host === me?.id) return goto("home");
+    setHomeSheet(host);
   }
 
   async function doAction(actionId: string, furnitureUid?: string) {
@@ -272,6 +311,26 @@ export default function Game() {
 
   const insidePlace = effectiveView === "place" && insideId ? PLACE_BY_ID[insideId] : undefined;
   const sceneKind = roomHousehold ? "room" : insidePlace ? "interior" : "city";
+  // Other players' Sims visiting the home on screen.
+  const roomSpot = roomHousehold ? homeSpot(roomHousehold.id) : null;
+  const guestPairs = roomHousehold
+    ? snapshot.households
+        .filter((h) => h.id !== roomHousehold.id)
+        .flatMap((h) =>
+          h.characters
+            .filter((c) => {
+              const w = whereIs(c, now);
+              return w.placeId === roomSpot && !w.arriving;
+            })
+            .map((c) => ({ c, h })),
+        )
+    : [];
+  const guests = guestPairs.map((g) => g.c);
+  const openGuest = (c: Character) => {
+    const pair = guestPairs.find((g) => g.c.id === c.id);
+    if (pair) setSimMenu(pair);
+  };
+  const meAtVisited = !!(visited && me && character && isAtSpot(character, me.id, homeSpot(visited.id), now));
 
   function enterPlace(id: string) {
     goto("place");
@@ -335,12 +394,16 @@ export default function Game() {
               }}
               onCharacterTap={(c) => {
                 if (effectiveView === "visit") {
-                  toast(`${c.name} · mood ${charMood(c)}`);
+                  const h = snapshot.households.find((x) => x.id === visited?.id);
+                  if (h && me) setSimMenu({ c, h });
+                  else toast(`${c.name} · mood ${charMood(c)}`);
                   return;
                 }
                 setSelCharId(c.id);
                 setSheet("needs");
               }}
+              guests={guests}
+              onGuestTap={(c) => (c.id === character?.id ? toast(`That's ${c.name}, visiting`) : openGuest(c))}
             />
           ) : insidePlace ? (
             <PlaceInterior
@@ -353,7 +416,15 @@ export default function Game() {
               waving={new Set(snapshot.chat.filter((m) => m.kind === "wave" && now - m.ts < 2500 && m.fromCharacterId).map((m) => m.fromCharacterId!))}
             />
           ) : (
-            <City households={snapshot.households} myHouseholdId={me?.id} latestTrade={latestTrade} trips={trips} clockOffset={clockOffset} />
+            <City
+              households={snapshot.households}
+              myHouseholdId={me?.id}
+              latestTrade={latestTrade}
+              trips={trips}
+              clockOffset={clockOffset}
+              ads={liveAds}
+              onBillboard={(id) => setAdSlot(id)}
+            />
           )}
           <Projector />
         </Scene>
@@ -361,7 +432,16 @@ export default function Game() {
 
       <div className="pointer-events-none absolute inset-0 z-[5]">
         {roomHousehold ? (
-          !buyMode && <CharacterBubbles household={roomHousehold} now={now} />
+          !buyMode && (
+            <CharacterBubbles
+              characters={[...roomHousehold.characters, ...guests]}
+              now={now}
+              chat={snapshot.chat}
+              channel={placeChannel(homeSpot(roomHousehold.id))}
+              guestIds={new Set(guests.map((g) => g.id))}
+              onGuest={(c) => (c.id === character?.id ? undefined : openGuest(c))}
+            />
+          )
         ) : insidePlace ? (
           <InsideLabels
             place={insidePlace}
@@ -385,6 +465,8 @@ export default function Game() {
               setPlaceId(id);
             }}
             trips={trips}
+            ads={liveAds}
+            onBillboard={(id) => setAdSlot(id)}
           />
         )}
       </div>
@@ -467,10 +549,48 @@ export default function Game() {
                 <Portrait key={c.id} look={c.look} size={34} ring={moodColor(charMood(c))} />
               ))}
             </div>
+            {meAtVisited && character && (
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 text-xs font-bold text-[#3ddc84]">📍 {character.name} is here visiting. Say hi!</div>
+                  <button
+                    disabled={!!character.busy && character.busy.until > now}
+                    onClick={async () => {
+                      const ok = await act("/api/place", { characterId: character.id, placeId: homeSpot(visited.id), actionId: "__home" });
+                      if (ok) {
+                        toast(`🏠 ${character.name} headed home`, "success");
+                        goto("home");
+                      }
+                    }}
+                    className="btn-blue cursor-pointer rounded-xl px-3 py-1 text-xs disabled:opacity-50"
+                  >
+                    Leave
+                  </button>
+                </div>
+                <ChatInput channel={placeChannel(homeSpot(visited.id))} character={character} act={act} compact placeholder={`Talk to everyone at ${visited.name}…`} />
+              </div>
+            )}
             <div className="mt-3 flex gap-2">
               <button onClick={() => goto("map")} className="btn-blue flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
                 ← CITY
               </button>
+              {me && character && !meAtVisited && (
+                <button onClick={() => setHomeSheet(visited.id)} className="btn-gold flex-1 cursor-pointer rounded-2xl py-2.5 text-base">
+                  🚗 GO OVER
+                </button>
+              )}
+              {meAtVisited && character && (
+                <button
+                  disabled={!!character.busy && character.busy.until > now}
+                  onClick={async () => {
+                    const ok = await act("/api/place", { characterId: character.id, placeId: homeSpot(visited.id), actionId: "__hang" });
+                    if (ok) toast(`🛋️ ${character.name} is hanging out at ${visited.name}`, "success");
+                  }}
+                  className="btn-gold flex-1 cursor-pointer rounded-2xl py-2.5 text-base disabled:opacity-50"
+                >
+                  🛋️ HANG OUT
+                </button>
+              )}
               {me && (
                 <button
                   onClick={() => {
@@ -733,6 +853,8 @@ export default function Game() {
           />
         )}
 
+        <CallManager snapshot={snapshot} me={me} act={act} refresh={() => void refresh()} toast={toast} />
+
         {/* Onboarding */}
         {auth.ready && !auth.authenticated && <Welcome />}
         {auth.authenticated && snapshot.me && !snapshot.me.householdId && !linking && !(auth.method === "privy" && auth.savedGuestId && !synced.current.guest) && (
@@ -744,11 +866,147 @@ export default function Game() {
           <div className="pointer-events-none absolute inset-x-0 bottom-[calc(9.8rem+env(safe-area-inset-bottom))] z-30 flex justify-center">
             <div className="glass font-display flex items-center gap-2 rounded-2xl px-4 py-2 text-base text-stroke">
               <span className="text-2xl">{TRAVEL[trip.travel ?? "car"].emoji}</span>
-              {character!.name} → {PLACE_BY_ID[trip.place!].short}
+              {character!.name} → {spotName(trip.place!, snapshot.households)}
               <span className="text-gold">{Math.max(0, Math.ceil(((trip.arriveAt ?? now) - now) / 1000))}s</span>
             </div>
           </div>
         )}
+
+        {/* Guests at your home */}
+        {effectiveView === "home" && me && character && !buyMode && guestPairs.length > 0 && !phone && !sheet && !menuFurn && (
+          <div className="glass-strong pointer-events-auto absolute inset-x-2 bottom-[calc(10.4rem+env(safe-area-inset-bottom))] z-30 mx-auto max-w-xl space-y-2 rounded-2xl p-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">👋</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-white">
+                {[...new Set(guestPairs.map((g) => g.c.name))].join(", ")} {guestPairs.length === 1 ? "is" : "are"} visiting
+              </span>
+              <button
+                disabled={!!character.busy && character.busy.until > now}
+                onClick={async () => {
+                  const ok = await act("/api/place", { characterId: character.id, placeId: homeSpot(me.id), actionId: "__hang" });
+                  if (ok) toast(`🛋️ ${character.name} is hanging out with the guests`, "success");
+                }}
+                className="btn-gold cursor-pointer rounded-xl px-3 py-1.5 text-xs disabled:opacity-50"
+              >
+                🛋️ Hang out
+              </button>
+            </div>
+            <ChatInput channel={placeChannel(homeSpot(me.id))} character={character} act={act} compact placeholder="Talk to your guests…" />
+          </div>
+        )}
+
+        {/* Travel to a neighbor's home */}
+        {homeSheet &&
+          (() => {
+            const host = snapshot.households.find((h) => h.id === homeSheet);
+            if (!host) return null;
+            const spot = homeSpot(host.id);
+            const w = character ? whereIs(character, now) : null;
+            const here = w?.placeId === spot && !w.arriving;
+            const onWay = w?.placeId === spot && w.arriving;
+            const busyNow = !!character?.busy && character.busy.until > now;
+            const ride = TRAVEL[rideMode];
+            return (
+              <Sheet title={host.name} subtitle={`${host.ownerNames.join(", ")}'s home · ${now - host.lastActive < ONLINE_MS ? "🟢 online" : "away"}`} icon={<span className="text-3xl">🏠</span>} onClose={() => setHomeSheet(null)}>
+                <div className="space-y-3 pb-2">
+                  {here ? (
+                    <button
+                      onClick={() => {
+                        setHomeSheet(null);
+                        setVisitId(host.id);
+                        goto("visit");
+                      }}
+                      className="btn-gold w-full cursor-pointer rounded-2xl py-3 text-xl"
+                    >
+                      🚪 Go in
+                    </button>
+                  ) : onWay ? (
+                    <div className="font-display rounded-2xl border-[3px] border-[#0d1b5e] bg-[#0d1b5e]/35 py-3 text-center text-lg text-stroke">On the way…</div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(Object.keys(TRAVEL) as TravelMode[]).map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => setRideMode(m)}
+                            className={cn("flex cursor-pointer flex-col items-center rounded-2xl border px-2 py-2.5", rideMode === m ? "neon-ring border-transparent bg-[#0d1b5e]/35" : "border-white/10 bg-white/[0.03]")}
+                          >
+                            <span className="text-2xl">{TRAVEL[m].emoji}</span>
+                            <span className="text-sm font-bold text-white">{TRAVEL[m].label}</span>
+                            <span className="font-mono text-[10px] text-slate-400">
+                              {TRAVEL[m].cost} {CURRENCY_SYMBOL} · {TRAVEL[m].seconds}s
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        disabled={!character || busyNow || (me?.balance ?? 0) < ride.cost}
+                        onClick={async () => {
+                          const ok = await act("/api/place", { characterId: character!.id, placeId: spot, actionId: "__travel", travel: rideMode });
+                          if (ok) {
+                            toast(`${ride.emoji} ${character!.name} is heading over to ${host.name}`, "success");
+                            setArrival({ placeId: spot, charId: character!.id });
+                            setHomeSheet(null);
+                            goto("map");
+                          }
+                        }}
+                        className="btn-gold w-full cursor-pointer rounded-2xl py-3 text-xl disabled:opacity-50"
+                      >
+                        {ride.emoji} Go by {ride.label.toLowerCase()} · {ride.cost} {CURRENCY_SYMBOL}
+                      </button>
+                    </>
+                  )}
+                  <div className="text-[11px] text-slate-400">Hang out together at their place for a social bonus. You can chat with everyone there.</div>
+                </div>
+              </Sheet>
+            );
+          })()}
+
+        {/* Billboard */}
+        {adSlot &&
+          (() => {
+            const slot = AD_SLOTS.find((x) => x.id === adSlot);
+            const ad = liveAds.find((a) => a.slot === adSlot);
+            if (!slot) return null;
+            return (
+              <Sheet
+                title={ad ? ad.name : `${slot.name} billboard`}
+                subtitle={ad ? "Sponsored · a project building on NEAR" : slot.where}
+                icon={
+                  ad?.hasImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={`/api/ads/${ad.id}/image`} alt="" className="size-11 rounded-xl border-[3px] border-[#0d1b5e] bg-white object-contain" />
+                  ) : (
+                    <span className="text-3xl">📣</span>
+                  )
+                }
+                onClose={() => setAdSlot(null)}
+              >
+                <div className="space-y-3 pb-2">
+                  {ad ? (
+                    <>
+                      <div className="well rounded-2xl p-3 text-base font-bold text-white">{ad.tagline || ad.name}</div>
+                      <button
+                        onClick={() => {
+                          void fetch(`/api/ads/${ad.id}/event`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type: "click" }) });
+                          window.open(ad.url, "_blank", "noopener,noreferrer");
+                        }}
+                        className="btn-gold w-full cursor-pointer rounded-2xl py-3 text-lg"
+                      >
+                        Visit {new URL(ad.url).host} ↗
+                      </button>
+                      <div className="text-[11px] text-slate-400">Sponsored. NEARLIFE checks every ad before it runs, but always do your own research.</div>
+                    </>
+                  ) : (
+                    <div className="well rounded-2xl p-3 text-sm font-bold text-white">This billboard is free. Put your NEAR project in front of every player in town.</div>
+                  )}
+                  <a href="/advertise" target="_blank" rel="noreferrer" className="btn-blue block w-full rounded-2xl py-2.5 text-center text-base">
+                    📣 Advertise here
+                  </a>
+                </div>
+              </Sheet>
+            );
+          })()}
 
         {/* Another player's Sim */}
         {simMenu && (
@@ -760,7 +1018,7 @@ export default function Game() {
             ) : (
               <div className="space-y-2 pb-2">
                 <div className="text-xs font-bold text-[#cfe0ff]">
-                  {now - simMenu.h.lastActive < ONLINE_MS ? "🟢 Online now" : "Away"} · {whereabouts(simMenu.h, now).text}
+                  {now - simMenu.h.lastActive < ONLINE_MS ? "🟢 Online now" : "Away"} · {whereabouts(simMenu.h, now, snapshot.households).text}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -796,7 +1054,32 @@ export default function Game() {
                     🏠 Visit
                   </button>
                 </div>
-                <div className="text-[11px] text-slate-400">Do an activity here at the same time to get a together bonus.</div>
+                {me && (
+                  <button
+                    onClick={() => {
+                      startCall(simMenu.h.id);
+                      setSimMenu(null);
+                    }}
+                    className="font-display w-full cursor-pointer rounded-2xl border-[3px] border-[#0d1b5e] bg-gradient-to-b from-[#5ef0a0] to-[#20b866] py-2.5 text-base text-white shadow-[0_4px_0_#0d1b5e]"
+                  >
+                    📞 Call {simMenu.h.name}
+                  </button>
+                )}
+                {me && (
+                  <button
+                    onClick={async () => {
+                      const ok = await act("/api/chat", { kind: "invite", toHouseholdId: simMenu.h.id, placeId: homeSpot(me.id), characterId: character?.id });
+                      if (ok) {
+                        toast(`🏠 Invited ${simMenu.c.name} over to your place`, "success");
+                        setSimMenu(null);
+                      }
+                    }}
+                    className="btn-blue w-full cursor-pointer rounded-2xl py-2.5 text-base"
+                  >
+                    🏠 Invite to my place
+                  </button>
+                )}
+                <div className="text-[11px] text-slate-400">Do an activity at the same place at the same time to get a together bonus.</div>
               </div>
             )}
           </Sheet>
@@ -826,8 +1109,8 @@ export default function Game() {
             }}
             onPlace={(id) => {
               setPhone(null);
-              setSheet(null);
-              setPlaceId(id);
+              setChatWith(null);
+              goToSpot(id);
             }}
             onSignOut={async () => {
               setPhone(null);

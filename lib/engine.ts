@@ -4,10 +4,10 @@
  */
 import { ACTIONS, CURRENCY, CURRENCY_SYMBOL, DECAY_PER_MIN, ITEMS, WORLD_EVENTS, WORLD_EVENT_MS, type WorldEventDef } from "./catalog";
 import { FLOOR_COLORS, WALL_COLORS, canPlace, furnitureFor, furnitureUid, placedCount, starterLayout } from "./layout";
-import { BURROW_LOAN, BURROW_REPAY, PLACE_BY_ID, TRAVEL, parsePlaceAction, placeActionId, travelActionId, whereIs, type TravelMode } from "./places";
+import { BURROW_LOAN, BURROW_REPAY, PLACE_BY_ID, TRAVEL, homeOwner, isAtSpot, parsePlaceAction, placeActionId, travelActionId, whereIs, type TravelMode } from "./places";
 import { TOWN, cleanChatText, dmChannel, dmMembers, placeChannel } from "./chat";
 import { ESCROW_ACCOUNT, LedgerError, inventoryOf, mt_balance_of, mt_burn, mt_mint, mt_transfer } from "./nep245";
-import type { ActivityEvent, Character, ChatMessage, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
+import type { ActivityEvent, CallState, Character, ChatMessage, GameState, Household, HouseholdView, Listing, NeedKey, Needs, StateSnapshot } from "./types";
 import { NEED_KEYS } from "./types";
 
 const MAX_CATCHUP_MS = 10 * 60_000;
@@ -121,6 +121,7 @@ export function completeAction(state: GameState, hh: Household, c: Character, no
     c.location = busy.place ?? null;
     return;
   }
+  if (busy.action.startsWith("homehang:")) return completeHomeHang(state, hh, c, busy.action.slice(9), now);
   const trip = parsePlaceAction(busy.action);
   if (trip) return completePlaceAction(state, hh, c, trip.place.id, trip.action.id, now);
   const action = ACTIONS[busy.action];
@@ -236,7 +237,10 @@ export function startPlaceAction(state: GameState, hh: Household, c: Character, 
 
 /** Take the car, train or plane to a city place. On arrival the Sim is there and can go inside. */
 export function travelTo(state: GameState, hh: Household, c: Character, placeId: string, mode: TravelMode, now: number) {
-  const place = PLACE_BY_ID[placeId];
+  const host = homeOwner(placeId) ? state.households[homeOwner(placeId)!] : undefined;
+  if (homeOwner(placeId) && !host) throw new GameError("That neighbor moved away");
+  if (host?.id === hh.id) throw new GameError("That's your own home. Tap 🏠 Home to head back");
+  const place = host ? { id: placeId, name: host.name, short: host.name } : PLACE_BY_ID[placeId];
   const travel = TRAVEL[mode];
   if (!place) throw new GameError("Unknown place");
   if (!travel) throw new GameError("Pick car, train or plane");
@@ -271,10 +275,7 @@ export function companionsAt(state: GameState, placeId: string, exceptHouseholdI
   const out: Array<{ hh: Household; c: Character }> = [];
   for (const hh of Object.values(state.households)) {
     if (hh.id === exceptHouseholdId) continue;
-    for (const c of hh.characters) {
-      const w = whereIs(c, now);
-      if (w.placeId === placeId && !w.arriving) out.push({ hh, c });
-    }
+    for (const c of hh.characters) if (isAtSpot(c, hh.id, placeId, now)) out.push({ hh, c });
   }
   return out;
 }
@@ -541,6 +542,45 @@ export function topUp(state: GameState, hh: Household, now: number) {
 }
 
 // ---------------------------------------------------------------------------
+// Visiting each other's homes
+// ---------------------------------------------------------------------------
+
+/** Hang out at a home (your own with guests over, or a neighbor's you've travelled to). */
+export function hangAtHome(state: GameState, hh: Household, c: Character, spotId: string, now: number) {
+  const host = state.households[homeOwner(spotId) ?? ""];
+  if (!host) throw new GameError("That home doesn't exist");
+  if (c.busy && c.busy.until > now) throw new GameError(`${c.name} is busy ${c.busy.label}`);
+  if (!isAtSpot(c, hh.id, spotId, now)) throw new GameError(`${c.name} isn't at ${host.name}`);
+  const guest = host.id !== hh.id;
+  c.busy = {
+    action: `homehang:${spotId}`,
+    label: `hanging out at ${guest ? host.name : "home"}`,
+    startedAt: now,
+    arriveAt: now,
+    until: now + 8000,
+    place: guest ? spotId : undefined,
+  };
+  hh.lastActive = now;
+}
+
+function completeHomeHang(state: GameState, hh: Household, c: Character, spotId: string, now: number) {
+  const host = state.households[homeOwner(spotId) ?? ""];
+  if (host && host.id !== hh.id) c.location = spotId;
+  const friends = companionsAt(state, spotId, hh.id, now).slice(0, 3);
+  const n = friends.length;
+  applyEffects(c, { social: 15 + 8 * n, fun: 8 + 4 * n });
+  if (n && host) {
+    addActivity(state, {
+      ...who(hh),
+      ts: now,
+      type: "social",
+      emoji: "🛋️",
+      text: `${c.name} (${hh.name}) hung out with ${names(friends)} at ${host.id === hh.id ? "home" : host.name}`,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Chat and meeting other players
 // ---------------------------------------------------------------------------
 
@@ -562,10 +602,7 @@ function rateLimit(state: GameState, hh: Household, now: number) {
 
 /** Is one of this household's Sims at the place (arrived)? Returns that Sim. */
 function simAt(hh: Household, placeId: string, now: number, preferId?: string) {
-  const here = hh.characters.filter((c) => {
-    const w = whereIs(c, now);
-    return w.placeId === placeId && !w.arriving;
-  });
+  const here = hh.characters.filter((c) => isAtSpot(c, hh.id, placeId, now));
   return here.find((c) => c.id === preferId) ?? here[0];
 }
 
@@ -582,9 +619,10 @@ export function postChat(state: GameState, hh: Household, channel: string, rawTe
     // open to everyone
   } else if (channel.startsWith("place:")) {
     const placeId = channel.slice(6);
-    if (!PLACE_BY_ID[placeId]) throw new GameError("Unknown place");
+    const host = homeOwner(placeId) ? state.households[homeOwner(placeId)!] : undefined;
+    if (!PLACE_BY_ID[placeId] && !host) throw new GameError("Unknown place");
     const here = simAt(hh, placeId, now, characterId);
-    if (!here) throw new GameError(`Go to ${PLACE_BY_ID[placeId].short} first to talk to people there`);
+    if (!here) throw new GameError(`Go to ${host ? host.name : PLACE_BY_ID[placeId].short} first to talk to people there`);
     speaker = here;
   } else {
     const members = dmMembers(channel);
@@ -604,8 +642,8 @@ export function waveAt(state: GameState, hh: Household, targetCharacterId: strin
     .flatMap((h) => h.characters.map((c) => ({ h, c })))
     .find((x) => x.c.id === targetCharacterId);
   if (!target) throw new GameError("They're not here any more");
-  const placeId = whereIs(target.c, now).placeId;
-  if (!placeId) throw new GameError(`${target.c.name} isn't out right now`);
+  // A Sim at home is "at" their own home spot.
+  const placeId = whereIs(target.c, now).placeId ?? `home:${target.h.id}`;
   const me = simAt(hh, placeId, now, characterId);
   if (!me) throw new GameError(`Go to ${PLACE_BY_ID[placeId]?.short ?? "them"} first`);
   rateLimit(state, hh, now);
@@ -626,7 +664,9 @@ export function waveAt(state: GameState, hh: Household, targetCharacterId: strin
 /** Invite a neighbor to meet at a place (sent as a direct message with a "Go there" button). */
 export function inviteTo(state: GameState, hh: Household, toHouseholdId: string, placeId: string, now: number, characterId?: string) {
   const to = state.households[toHouseholdId];
-  const place = PLACE_BY_ID[placeId];
+  const home = homeOwner(placeId);
+  if (home && home !== hh.id) throw new GameError("You can only invite people to your own home");
+  const place = home ? { name: hh.name, emoji: "🏠" } : PLACE_BY_ID[placeId];
   if (!to || to.id === hh.id) throw new GameError("Pick a neighbor to invite");
   if (!place) throw new GameError("Unknown place");
   rateLimit(state, hh, now);
@@ -638,10 +678,100 @@ export function inviteTo(state: GameState, hh: Household, toHouseholdId: string,
     fromHouseholdId: hh.id,
     fromCharacterId: speaker?.id,
     fromName: speaker?.name ?? hh.name,
-    text: `Meet me at ${place.name}? ${place.emoji}`,
+    text: home ? `Come over to my place, ${place.name}? ${place.emoji}` : `Meet me at ${place.name}? ${place.emoji}`,
     kind: "invite",
     placeId,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Voice calls (the server relays the WebRTC offer/answer; audio is peer to peer)
+// ---------------------------------------------------------------------------
+
+const RING_MS = 35_000;
+const MAX_CALL_MS = 2 * 60 * 60_000;
+const SDP_MAX = 30_000;
+
+function liveCallOf(state: GameState, householdId: string) {
+  return Object.values(state.calls ?? {}).find((c) => c.status !== "ended" && (c.from === householdId || c.to === householdId));
+}
+
+const mmss = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, "0")}`;
+
+function logCall(state: GameState, call: CallState, from: Household | undefined, text: string, now: number) {
+  pushChat(state, { ts: now, channel: dmChannel(call.from, call.to), fromHouseholdId: call.from, fromName: from?.characters[0]?.name ?? from?.name ?? "Neighbor", text, kind: "call" });
+}
+
+export function startCall(state: GameState, hh: Household, toHouseholdId: string, offer: string, now: number) {
+  const to = state.households[toHouseholdId];
+  if (!to || to.id === hh.id) throw new GameError("Pick a neighbor to call");
+  if (typeof offer !== "string" || !offer.startsWith("v=0") || offer.length > SDP_MAX) throw new GameError("Couldn't start the call");
+  if (liveCallOf(state, hh.id)) throw new GameError("You're already on a call");
+  if (liveCallOf(state, to.id)) throw new GameError(`${to.name} is on another call`);
+  const recent = Object.values(state.calls ?? {}).some((c) => c.from === hh.id && now - c.createdAt < 4000);
+  if (recent) throw new GameError("Give it a second before calling again");
+  state.calls ??= {};
+  const call: CallState = { id: uid("call"), from: hh.id, to: to.id, status: "ringing", offer, createdAt: now };
+  state.calls[call.id] = call;
+  hh.lastActive = now;
+  return { id: call.id };
+}
+
+export function answerCall(state: GameState, hh: Household, callId: string, answer: string, now: number) {
+  const call = state.calls?.[callId];
+  if (!call || call.to !== hh.id) throw new GameError("Call not found");
+  if (call.status !== "ringing") throw new GameError("That call has ended");
+  if (typeof answer !== "string" || !answer.startsWith("v=0") || answer.length > SDP_MAX) throw new GameError("Couldn't answer the call");
+  call.status = "active";
+  call.answer = answer;
+  call.answeredAt = now;
+  hh.lastActive = now;
+}
+
+function finishCall(state: GameState, call: CallState, reason: NonNullable<CallState["endReason"]>, now: number) {
+  call.status = "ended";
+  call.endReason = reason;
+  call.endedAt = now;
+  delete call.offer;
+  delete call.answer;
+  const from = state.households[call.from];
+  const to = state.households[call.to];
+  if (reason === "hangup" && call.answeredAt) {
+    const dur = now - call.answeredAt;
+    // Talking to a neighbor is good for you: up to +40 social each.
+    const boost = Math.min(40, 10 + Math.floor(dur / 60_000) * 8);
+    for (const h of [from, to]) if (h?.characters[0]) applyEffects(h.characters[0], { social: boost, fun: Math.round(boost / 3) });
+    logCall(state, call, from, `📞 Call · ${mmss(dur)}`, now);
+    if (from && to && dur >= 20_000) {
+      addActivity(state, { ...who(from), ts: now, type: "social", emoji: "📞", counterpartyHouseholdId: to.id, text: `${from.name} and ${to.name} talked on the phone for ${mmss(dur)}` });
+    }
+  } else if (reason === "missed" || reason === "cancelled") {
+    logCall(state, call, from, "📞 Missed call", now);
+  } else if (reason === "declined") {
+    logCall(state, call, from, "📞 Call declined", now);
+  }
+}
+
+export function endCall(state: GameState, hh: Household, callId: string, now: number) {
+  const call = state.calls?.[callId];
+  if (!call || (call.from !== hh.id && call.to !== hh.id)) throw new GameError("Call not found");
+  if (call.status === "ended") return;
+  const reason = call.status === "ringing" ? (call.to === hh.id ? "declined" : "cancelled") : "hangup";
+  finishCall(state, call, reason, now);
+}
+
+function expireCalls(state: GameState, now: number) {
+  for (const call of Object.values(state.calls ?? {})) {
+    if (call.status === "ringing" && now - call.createdAt > RING_MS) finishCall(state, call, "missed", now);
+    else if (call.status === "active" && now - (call.answeredAt ?? call.createdAt) > MAX_CALL_MS) finishCall(state, call, "hangup", now);
+    else if (call.status === "ended" && now - (call.endedAt ?? 0) > 60_000) delete state.calls![call.id];
+  }
+}
+
+/** Calls a viewer is part of: ringing, active, or ended in the last few seconds (so both sides see it end). */
+export function visibleCalls(state: GameState, householdId: string | null, now: number) {
+  if (!householdId) return [];
+  return Object.values(state.calls ?? {}).filter((c) => (c.from === householdId || c.to === householdId) && (c.status !== "ended" || now - (c.endedAt ?? 0) < 15_000));
 }
 
 /** Messages a viewer can see: town chat, place chats, and their own direct messages. */
@@ -713,6 +843,7 @@ function rotateWorldEvent(state: GameState, now: number) {
 export function advance(state: GameState, now: number) {
   migrate(state, now);
   rotateWorldEvent(state, now);
+  expireCalls(state, now);
   const mult = currentEvent(state).decay;
   const dt = Math.min(Math.max(0, now - state.lastAdvance), MAX_CATCHUP_MS);
   const minutes = dt / 60_000;
@@ -762,6 +893,7 @@ export function snapshot(
     worldEvent: state.worldEvent ?? null,
     me: userId ? { userId, householdId: state.players[userId] ?? null } : null,
     chat: visibleChat(state, userId ? (state.players[userId] ?? null) : null),
+    calls: visibleCalls(state, userId ? (state.players[userId] ?? null) : null, now),
     config,
   };
 }

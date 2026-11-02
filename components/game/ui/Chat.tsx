@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TOWN, CHAT_MAX_LEN, dmChannel, dmPartner, placeChannel } from "@/lib/chat";
-import { PLACES, PLACE_BY_ID, whereIs } from "@/lib/places";
+import { PLACES, PLACE_BY_ID, homeOwner, homeSpot, spotName, whereIs } from "@/lib/places";
 import type { Character, ChatMessage, HouseholdView, StateSnapshot } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 import { Portrait } from "./Portrait";
+import { startCall } from "./Call";
 
 type Act = <T = unknown>(path: string, body?: unknown, method?: "POST" | "DELETE") => Promise<T | null>;
 
@@ -65,17 +66,24 @@ function speakerLook(households: HouseholdView[], m: ChatMessage) {
   return (h?.characters.find((c) => c.id === m.fromCharacterId) ?? h?.characters[0])?.look;
 }
 
-/** Where a household's Sims are, in words ("at 24/7 Club", "on the way to Ref", "at home"). */
-export function whereabouts(h: HouseholdView, now: number) {
+/** Where a household's Sims are, in words ("at 24/7 Club", "visiting Kemi's Place", "at home"). */
+export function whereabouts(h: HouseholdView, now: number, households: HouseholdView[] = []) {
   for (const c of h.characters) {
     const w = whereIs(c, now);
-    if (w.placeId) return { placeId: w.placeId, text: `${w.arriving ? "on the way to" : "at"} ${PLACE_BY_ID[w.placeId]?.short ?? "town"}` };
+    if (w.placeId) {
+      const home = homeOwner(w.placeId);
+      const name = spotName(w.placeId, households);
+      return { placeId: w.placeId, text: home ? `${w.arriving ? "on the way to" : "visiting"} ${name}` : `${w.arriving ? "on the way to" : "at"} ${name}` };
+    }
   }
-  return { placeId: null, text: "at home" };
+  return { placeId: homeSpot(h.id), text: "at home" };
 }
 
 function Bubble({ m, mine, households, showWho, onPlace }: { m: ChatMessage; mine: boolean; households: HouseholdView[]; showWho: boolean; onPlace?: (id: string) => void }) {
   const h = households.find((x) => x.id === m.fromHouseholdId);
+  if (m.kind === "call") {
+    return <div className="text-center text-xs font-black text-[#cfe0ff]">{m.text}</div>;
+  }
   if (m.kind === "wave") {
     return (
       <div className="text-center text-xs font-bold text-[#cfe0ff]">
@@ -83,7 +91,7 @@ function Bubble({ m, mine, households, showWho, onPlace }: { m: ChatMessage; min
       </div>
     );
   }
-  const place = m.kind === "invite" && m.placeId ? PLACE_BY_ID[m.placeId] : undefined;
+  const invite = m.kind === "invite" && m.placeId ? { id: m.placeId, short: spotName(m.placeId, households) } : undefined;
   return (
     <div className={cn("flex items-end gap-2", mine && "flex-row-reverse")}>
       {!mine && <Portrait look={speakerLook(households, m)} size={30} />}
@@ -101,9 +109,9 @@ function Bubble({ m, mine, households, showWho, onPlace }: { m: ChatMessage; min
           )}
         >
           {m.text}
-          {place && !mine && onPlace && (
-            <button onClick={() => onPlace(place.id)} className="btn-gold mt-1.5 block w-full cursor-pointer rounded-xl px-3 py-1 text-xs">
-              🚗 Go to {place.short}
+          {invite && !mine && onPlace && (
+            <button onClick={() => onPlace(invite.id)} className="btn-gold mt-1.5 block w-full cursor-pointer rounded-xl px-3 py-1 text-xs">
+              🚗 Go to {invite.short}
             </button>
           )}
         </div>
@@ -278,7 +286,7 @@ export function ChatApp({
             ) : (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {online.map((h) => {
-                  const where = whereabouts(h, now);
+                  const where = whereabouts(h, now, snapshot.households);
                   return (
                     <button
                       key={h.id}
@@ -338,7 +346,7 @@ export function ChatApp({
                   <span className="min-w-0 flex-1">
                     <span className="font-display block truncate text-base text-stroke">{h.name}</span>
                     <span className="block truncate text-xs font-bold text-[#cfe0ff]">
-                      {last ? `${last.fromHouseholdId === me.id ? "You: " : ""}${last.text}` : isOnline ? `Online · ${whereabouts(h, now).text}` : `Seen ${timeAgo(h.lastActive, now)}`}
+                      {last ? `${last.fromHouseholdId === me.id ? "You: " : ""}${last.text}` : isOnline ? `Online · ${whereabouts(h, now, snapshot.households).text}` : `Seen ${timeAgo(h.lastActive, now)}`}
                     </span>
                   </span>
                   {n > 0 && <span className="min-w-6 rounded-full border-2 border-[#0d1b5e] bg-[#ff5a6e] px-1.5 text-center text-xs font-black text-white">{n}</span>}
@@ -358,14 +366,19 @@ export function ChatApp({
             <span className="min-w-0 flex-1">
               <span className="font-display block truncate text-base leading-tight text-stroke">{dmHousehold.name}</span>
               <span className="block truncate text-[10px] font-bold text-[#cfe0ff]">
-                {now - dmHousehold.lastActive < ONLINE_MS ? `🟢 online · ${whereabouts(dmHousehold, now).text}` : `seen ${timeAgo(dmHousehold.lastActive, now)}`}
+                {now - dmHousehold.lastActive < ONLINE_MS ? `🟢 online · ${whereabouts(dmHousehold, now, snapshot.households).text}` : `seen ${timeAgo(dmHousehold.lastActive, now)}`}
               </span>
             </span>
-            {whereabouts(dmHousehold, now).placeId && (
-              <button onClick={() => onPlace(whereabouts(dmHousehold, now).placeId!)} className="btn-blue cursor-pointer rounded-lg px-2 py-1 text-xs">
-                Join
-              </button>
-            )}
+            <button onClick={() => onPlace(whereabouts(dmHousehold, now, snapshot.households).placeId)} className="btn-blue cursor-pointer rounded-lg px-2 py-1 text-xs">
+              Join
+            </button>
+            <button
+              onClick={() => startCall(dmHousehold.id)}
+              aria-label={`Call ${dmHousehold.name}`}
+              className="cursor-pointer rounded-lg border-2 border-[#0d1b5e] bg-gradient-to-b from-[#5ef0a0] to-[#20b866] px-2 py-1 text-xs"
+            >
+              📞
+            </button>
             <button onClick={() => setInviteOpen((o) => !o)} className="btn-gold cursor-pointer rounded-lg px-2 py-1 text-xs">
               📍 Invite
             </button>
@@ -373,6 +386,19 @@ export function ChatApp({
           {inviteOpen && (
             <div className="well max-h-40 space-y-1 overflow-y-auto rounded-2xl p-2">
               <div className="px-1 text-[10px] font-black tracking-widest text-[#cfe0ff]">MEET AT…</div>
+              <button
+                onClick={async () => {
+                  const ok = await act("/api/chat", { kind: "invite", toHouseholdId: dmHousehold.id, placeId: homeSpot(me.id), characterId: character?.id });
+                  if (ok) {
+                    toast(`🏠 Invited ${dmHousehold.name} over to your place`, "success");
+                    setInviteOpen(false);
+                  }
+                }}
+                className="flex w-full cursor-pointer items-center gap-2 rounded-xl bg-[#ffd23f]/20 px-2 py-1.5 text-left text-sm font-bold text-white hover:bg-white/10"
+              >
+                <span>🏠</span>
+                <span className="flex-1 truncate">My place · {me.name}</span>
+              </button>
               {[...PLACES].sort((a, b) => (a.id === here?.slice(6) ? -1 : b.id === here?.slice(6) ? 1 : a.own ? -1 : b.own ? 1 : 0)).map((p) => (
                 <button
                   key={p.id}

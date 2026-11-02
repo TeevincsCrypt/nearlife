@@ -33,6 +33,12 @@ Open the deployed URL, or run locally with `npm install && npm run dev` and open
   - **Speech bubbles:** messages pop up as bubbles over your Sim inside places.
   - **Tap a player's Sim** to wave (+social for both), message them or visit their home.
   - **Together bonus:** doing an activity at the same place as other players adds social and fun, and boosts payouts.
+- **Invite people to your place.** In a DM (📍 Invite → "My place") or by tapping their Sim, invite a neighbor over. They travel to your home, show up in your room as a guest, and you can chat there and hang out together for a bonus.
+- **Call each other.** 📞 in a DM, or on a player's Sim, starts a real voice call (WebRTC, peer to peer). The other player gets a ringing screen and can answer or decline. While you talk, a call bar with mute and hang-up stays on screen so you can keep playing. Calls give both Sims a social boost, and missed or finished calls show up in your messages.
+- **Billboards for NEAR projects.** Four billboards around the city show ads from projects building on NEAR.
+  - Projects book one at `/advertise` and pay in NEAR straight to your account (`NEARLIFE_AD_TREASURY`).
+  - The server checks the payment on-chain, then you approve or reject it at `/advertise/admin`.
+  - Advertisers get a status page with views and clicks, and players tap a billboard to visit the project.
 - **Travel, then go inside.** Tap a place on the map, pick car, train or plane, and watch your Sim travel. When they arrive you can go inside and do things there.
 - **The 24/7 Club.** NEARLIFE's own nightclub, open around the clock: dance (best with friends), grab a mocktail, or DJ a set for tips.
 - **Real time.** The clock, day and night follow your own local time.
@@ -257,7 +263,11 @@ All variables are documented in [`.env.example`](./.env.example).
 | `NEARLIFE_ACCOUNT_SECRET` | yes in prod | Seed for fallback player implicit accounts. |
 | `NEARLIFE_ESCROW_ACCOUNT` | no | Market escrow account id used in NEP-245 events. |
 | `NEP245_CONTRACT_ID`, `NEAR_OPERATOR_ACCOUNT_ID`, `NEAR_OPERATOR_PRIVATE_KEY` | no | Enable on-chain settlement. |
-| `NEARLIFE_ADMIN_TOKEN` | no | Enables `POST /api/reset`. |
+| `NEARLIFE_ADMIN_TOKEN` | for billboards | Owner token for `/advertise/admin` (approve ads) and `POST /api/reset`. |
+| `NEARLIFE_AD_TREASURY` | for billboards | Your NEAR account that receives ad payments. Bookings stay closed until set. |
+| `NEARLIFE_AD_PRICE_NEAR` | no | Base price per billboard per day in NEAR (default 1; Town Square ×2, Club Corner ×1.5). |
+| `NEARLIFE_AD_NETWORK`, `NEARLIFE_AD_RPC_URL` | no | Network the payments are checked on (default `mainnet`) and an optional RPC. |
+| `NEXT_PUBLIC_TURN_URL`, `NEXT_PUBLIC_TURN_USERNAME`, `NEXT_PUBLIC_TURN_CREDENTIAL` | no | TURN relay so voice calls also connect on strict networks. |
 | `NEXT_PUBLIC_REAL_MODE` | no | `false` hides all real-transaction panels (default on). |
 | `NEXT_PUBLIC_REAL_NETWORK`, `NEXT_PUBLIC_REAL_RPC_URL` | no | Network for real mode (default `mainnet`, FastNEAR RPC). |
 | `NEXT_PUBLIC_REAL_MAX_NEAR` | no | Max NEAR attached per real transaction (default 1). |

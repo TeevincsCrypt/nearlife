@@ -364,6 +364,8 @@ export function Room({
   onFloorHover,
   onFurnitureTap,
   onCharacterTap,
+  guests = [],
+  onGuestTap,
 }: {
   household: HouseholdView;
   now: number;
@@ -377,6 +379,9 @@ export function Room({
   onFloorHover?: (x: number, z: number) => void;
   onFurnitureTap?: (f: PlacedFurniture) => void;
   onCharacterTap?: (c: Character) => void;
+  /** Other players' Sims visiting this home: they wander around the room. */
+  guests?: Character[];
+  onGuestTap?: (c: Character) => void;
 }) {
   const layout = household.layout ?? [];
   const usage = new Map<string, number>();
@@ -446,6 +451,9 @@ export function Room({
           />
         );
       })}
+      {guests.map((g, i) => (
+        <RoomCharacter key={g.id} c={{ ...g, busy: null, location: null }} layout={layout} now={now} slot={household.characters.length + i} selected={false} onTap={() => onGuestTap?.(g)} />
+      ))}
     </group>
   );
 }

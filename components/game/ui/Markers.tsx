@@ -3,10 +3,11 @@
 import { LOGOS } from "./BrandIcon";
 import { ACTIONS, ITEMS } from "@/lib/catalog";
 import { PLACES, PLACE_BY_ID, TRAVEL } from "@/lib/places";
-import type { HouseholdView } from "@/lib/types";
+import type { Character, ChatMessage, HouseholdView } from "@/lib/types";
 import { AnchoredLabel } from "../three/anchors";
 import { cityPlacement, type Landmark, type Trip } from "../three/City";
 import { REAL_IDS } from "./RealMode";
+import { AD_SLOTS, type LiveAd } from "@/lib/ad-slots";
 
 function Pin({
   emoji,
@@ -73,6 +74,8 @@ export function CityMarkers({
   onLandmark,
   onPlace,
   trips = [],
+  ads = [],
+  onBillboard,
 }: {
   households: HouseholdView[];
   myHouseholdId?: string | null;
@@ -82,6 +85,8 @@ export function CityMarkers({
   onLandmark: (l: Landmark) => void;
   onPlace: (placeId: string) => void;
   trips?: Array<Trip & { label: string }>;
+  ads?: LiveAd[];
+  onBillboard?: (slotId: string) => void;
 }) {
   const placed = cityPlacement(households);
   return (
@@ -97,6 +102,19 @@ export function CityMarkers({
           <PlacePin id={p.id} emoji={p.emoji} label={p.short} color={p.color} real={REAL_IDS.has(p.id)} onClick={() => onPlace(p.id)} />
         </AnchoredLabel>
       ))}
+      {AD_SLOTS.map((slot) => {
+        const ad = ads.find((a) => a.slot === slot.id);
+        return (
+          <AnchoredLabel key={slot.id} id={`ad:${slot.id}`}>
+            <button
+              onClick={() => onBillboard?.(slot.id)}
+              className={`pointer-events-auto cursor-pointer rounded-lg border-2 border-[#0d1b5e] px-1.5 py-0.5 text-[10px] font-black whitespace-nowrap shadow-[0_2px_0_#0d1b5e] ${ad ? "bg-[#ffd23f] text-[#7a3d00]" : "bg-white text-[#2a4ed0]"}`}
+            >
+              {ad ? `AD · ${ad.name}` : "📣 Ad space"}
+            </button>
+          </AnchoredLabel>
+        );
+      })}
       {trips.map((t) => (
         <AnchoredLabel key={t.id} id={`trip:${t.id}`}>
           <div className="glass rounded-lg px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap">
@@ -125,23 +143,52 @@ export function CityMarkers({
   );
 }
 
-/** Activity bubbles over Sims in a room. */
-export function CharacterBubbles({ household, now }: { household: HouseholdView; now: number }) {
+/** Activity bubbles, name tags and chat speech bubbles over Sims in a home. */
+export function CharacterBubbles({
+  characters,
+  now,
+  chat = [],
+  channel,
+  guestIds,
+  onGuest,
+}: {
+  characters: Character[];
+  now: number;
+  chat?: ChatMessage[];
+  channel?: string;
+  guestIds?: Set<string>;
+  onGuest?: (c: Character) => void;
+}) {
+  const said = new Map<string, ChatMessage>();
+  if (channel) for (const m of chat) if (m.channel === channel && m.fromCharacterId && now - m.ts < 9000) said.set(m.fromCharacterId, m);
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {household.characters.map((c) => {
-        const busy = c.busy && c.busy.until > now ? c.busy : null;
+      {characters.map((c) => {
+        const guest = guestIds?.has(c.id);
+        const busy = !guest && c.busy && c.busy.until > now ? c.busy : null;
         const emoji = busy ? (busy.itemId ? ITEMS[busy.itemId]?.emoji : busy.place ? PLACE_BY_ID[busy.place]?.emoji : ACTIONS[busy.action]?.emoji) : null;
+        const line = said.get(c.id);
         return (
           <AnchoredLabel key={c.id} id={`char:${c.id}`}>
-            {emoji ? (
-              <div className="glass flex items-center gap-1 rounded-xl px-2 py-0.5 text-lg">
-                {emoji}
-                <span className="font-mono text-[11px] font-bold text-[#ffd23f]">{Math.ceil((busy!.until - now) / 1000)}s</span>
-              </div>
-            ) : (
-              <div className="glass rounded-lg px-2 py-0.5 text-[11px] font-semibold">{c.name}</div>
-            )}
+            <div className="flex flex-col items-center gap-1">
+              {line && (
+                <div className="relative max-w-[200px] rounded-2xl border-[3px] border-[#0d1b5e] bg-white px-2.5 py-1 text-center text-xs font-bold break-words text-[#0d1b5e] shadow-[0_3px_0_#0d1b5e]">
+                  {line.kind === "wave" ? "👋" : line.text}
+                </div>
+              )}
+              {emoji ? (
+                <div className="glass flex items-center gap-1 rounded-xl px-2 py-0.5 text-lg">
+                  {emoji}
+                  <span className="font-mono text-[11px] font-bold text-[#ffd23f]">{Math.ceil((busy!.until - now) / 1000)}s</span>
+                </div>
+              ) : guest ? (
+                <button onClick={() => onGuest?.(c)} className="btn-gold pointer-events-auto cursor-pointer rounded-lg px-2 py-0.5 text-[11px]">
+                  {c.name} · guest
+                </button>
+              ) : (
+                <div className="glass rounded-lg px-2 py-0.5 text-[11px] font-semibold">{c.name}</div>
+              )}
+            </div>
           </AnchoredLabel>
         );
       })}

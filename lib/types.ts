@@ -143,9 +143,23 @@ export interface ChatMessage {
   fromCharacterId?: string;
   fromName: string;
   text: string;
-  kind?: "text" | "wave" | "invite";
+  kind?: "text" | "wave" | "invite" | "call";
   /** Invites: the place to meet at. */
   placeId?: string;
+}
+
+/** A voice call between two households. Audio goes peer to peer (WebRTC); the server only relays the offer and answer. */
+export interface CallState {
+  id: string;
+  from: string;
+  to: string;
+  status: "ringing" | "active" | "ended";
+  endReason?: "declined" | "missed" | "cancelled" | "hangup";
+  offer?: string;
+  answer?: string;
+  createdAt: number;
+  answeredAt?: number;
+  endedAt?: number;
 }
 
 export interface GameState {
@@ -167,6 +181,7 @@ export interface GameState {
   /** Real NEAR transaction hashes already credited (prevents double-claiming). */
   realTxs?: string[];
   chat?: ChatMessage[];
+  calls?: Record<string, CallState>;
   stats: {
     trades: number;
     volume: number;
@@ -190,6 +205,8 @@ export interface StateSnapshot {
   me: { userId: string; householdId: string | null } | null;
   /** Town chat, place chats, and the viewer's own direct messages. */
   chat: ChatMessage[];
+  /** The viewer's own calls (ringing, active, or just ended). */
+  calls: CallState[];
   config: {
     auth: "privy" | "guest" | "privy+guest";
     storage: "redis" | "memory";

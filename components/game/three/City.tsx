@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, SRGBColorSpace, type Group } from "three";
 import { Anchor } from "./anchors";
 import { LogoSignpost } from "./LogoBoard";
 import { PLACES, type BuildingStyle, type PlaceDef, type TravelMode } from "@/lib/places";
 import type { ActivityEvent, HouseholdView } from "@/lib/types";
+import { AD_SLOTS, type AdSlot, type LiveAd } from "@/lib/ad-slots";
 
 export type Landmark = "market" | "office" | "park";
 
@@ -281,6 +282,144 @@ function TradeScreen({ text }: { text: string }) {
         <planeGeometry args={[5.1, 2.27]} />
         <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
+    </group>
+  );
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function strokeText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, fill: string) {
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 14;
+  ctx.strokeStyle = "#0d1b5e";
+  ctx.strokeText(text, x, y, maxW);
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y, maxW);
+}
+
+/** Paint a billboard: the booked ad, or an invitation to advertise. */
+function drawBillboard(ctx: CanvasRenderingContext2D, ad: LiveAd | undefined, logo: HTMLImageElement | null) {
+  const W = 1024;
+  const H = 576;
+  ctx.clearRect(0, 0, W, H);
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, ad ? ad.color : "#3d6cf2");
+  bg.addColorStop(1, ad ? "#0d1b5e" : "#2443c9");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.textBaseline = "middle";
+  if (!ad) {
+    ctx.textAlign = "center";
+    ctx.font = "900 92px system-ui, sans-serif";
+    strokeText(ctx, "YOUR NEAR PROJECT", W / 2, 200, 940, "#ffd23f");
+    strokeText(ctx, "COULD BE HERE", W / 2, 310, 940, "#ffffff");
+    ctx.font = "800 46px system-ui, sans-serif";
+    strokeText(ctx, "Tap to advertise in NEARLIFE", W / 2, 440, 940, "#bdf0ff");
+    return;
+  }
+  // "AD" tag
+  ctx.fillStyle = "#ffd23f";
+  roundRect(ctx, 28, 24, 108, 60, 14);
+  ctx.fill();
+  ctx.fillStyle = "#7a3d00";
+  ctx.font = "900 40px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("AD", 82, 56);
+  let textX = 70;
+  if (logo) {
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, 56, 130, 300, 300, 40);
+    ctx.fill();
+    ctx.save();
+    roundRect(ctx, 68, 142, 276, 276, 32);
+    ctx.clip();
+    const s = Math.min(276 / logo.width, 276 / logo.height);
+    ctx.drawImage(logo, 68 + (276 - logo.width * s) / 2, 142 + (276 - logo.height * s) / 2, logo.width * s, logo.height * s);
+    ctx.restore();
+    textX = 400;
+  }
+  ctx.textAlign = "left";
+  const maxW = W - textX - 50;
+  ctx.font = "900 96px system-ui, sans-serif";
+  strokeText(ctx, ad.name, textX, 230, maxW, "#ffffff");
+  ctx.font = "800 44px system-ui, sans-serif";
+  const words = ad.tagline.split(" ");
+  let line = "";
+  let y = 330;
+  for (const w of words) {
+    const next = line ? `${line} ${w}` : w;
+    if (ctx.measureText(next).width > maxW && line) {
+      strokeText(ctx, line, textX, y, maxW, "#ffd23f");
+      line = w;
+      y += 56;
+    } else line = next;
+  }
+  if (line) strokeText(ctx, line, textX, y, maxW, "#ffd23f");
+  ctx.font = "700 34px system-ui, sans-serif";
+  ctx.fillStyle = "#cfe0ff";
+  ctx.textAlign = "right";
+  ctx.fillText(new URL(ad.url).host, W - 40, H - 40);
+}
+
+/** A roadside billboard that NEAR projects can book. */
+function Billboard({ slot, ad, onTap }: { slot: AdSlot; ad?: LiveAd; onTap?: (slotId: string) => void }) {
+  const { canvas, tex } = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1024;
+    canvas.height = 576;
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    return { canvas, tex };
+  }, []);
+  useEffect(() => {
+    const ctx = canvas.getContext("2d")!;
+    drawBillboard(ctx, ad, null);
+    tex.needsUpdate = true;
+    if (!ad?.hasImage) return;
+    let alive = true;
+    const img = new Image();
+    img.onload = () => {
+      if (!alive) return;
+      drawBillboard(ctx, ad, img);
+      tex.needsUpdate = true;
+    };
+    img.src = `/api/ads/${ad.id}/image`;
+    return () => {
+      alive = false;
+    };
+  }, [ad?.id, ad?.name, ad?.tagline, ad?.color, ad?.hasImage, canvas, tex]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <group position={[slot.pos[0], 0, slot.pos[1]]} rotation={[0, 0.63, 0]}>
+      {[-1.6, 1.6].map((x) => (
+        <mesh key={x} position={[x, 1.7, -0.05]} castShadow>
+          <cylinderGeometry args={[0.1, 0.12, 3.4, 10]} />
+          <meshStandardMaterial color="#0d1b5e" />
+        </mesh>
+      ))}
+      <mesh position={[0, 4.6, -0.1]} castShadow>
+        <boxGeometry args={[4.6, 2.75, 0.18]} />
+        <meshStandardMaterial color="#0d1b5e" />
+      </mesh>
+      <mesh
+        position={[0, 4.6, 0.005]}
+        onClick={(e) => {
+          if (e.delta > 6) return;
+          e.stopPropagation();
+          onTap?.(slot.id);
+        }}
+      >
+        <planeGeometry args={[4.32, 2.43]} />
+        <meshBasicMaterial map={tex} toneMapped={false} />
+      </mesh>
+      <Anchor id={`ad:${slot.id}`} offsetY={6.4} scaleRef={40} />
     </group>
   );
 }
@@ -767,12 +906,16 @@ export function City({
   latestTrade,
   trips = [],
   clockOffset = 0,
+  ads = [],
+  onBillboard,
 }: {
   households: HouseholdView[];
   myHouseholdId?: string | null;
   latestTrade?: ActivityEvent;
   trips?: Trip[];
   clockOffset?: number;
+  ads?: LiveAd[];
+  onBillboard?: (slotId: string) => void;
 }) {
   const placed = useMemo(() => cityPlacement(households), [households]);
   const open = SLOTS.slice(placed.length, placed.length + OPEN_PLOTS);
@@ -825,6 +968,9 @@ export function City({
       <WorkHub />
       {PLACES.map((p) => (
         <PlaceBuilding key={p.id} place={p} />
+      ))}
+      {AD_SLOTS.map((slot) => (
+        <Billboard key={slot.id} slot={slot} ad={ads.find((a) => a.slot === slot.id)} onTap={onBillboard} />
       ))}
       <Railway />
       <Airfield />

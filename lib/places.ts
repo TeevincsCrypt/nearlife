@@ -368,3 +368,29 @@ export function whereIs(c: Character, now: number): { placeId: string | null; ar
   if (b && b.until > now) return { placeId: null, arriving: false, busy: true };
   return { placeId: c.location ?? null, arriving: false, busy: false };
 }
+
+/** A player's home as a destination other players can travel to ("home:<householdId>"). */
+export function homeSpot(householdId: string) {
+  return `home:${householdId}`;
+}
+
+/** The household whose home a spot id points at, or null for city places. */
+export function homeOwner(spotId: string | null | undefined) {
+  return spotId && spotId.startsWith("home:") ? spotId.slice(5) : null;
+}
+
+/** Display name for a place or a player's home. */
+export function spotName(spotId: string, households: Array<{ id: string; name: string }>, short = true) {
+  const owner = homeOwner(spotId);
+  if (owner) return households.find((h) => h.id === owner)?.name ?? "a neighbor's home";
+  const p = PLACE_BY_ID[spotId];
+  return p ? (short ? p.short : p.name) : "town";
+}
+
+/** Is this Sim at the spot right now? A home's own Sims count as there whenever they're at home. */
+export function isAtSpot(c: Character, householdId: string, spotId: string, now: number) {
+  const w = whereIs(c, now);
+  if (w.placeId === spotId && !w.arriving) return true;
+  const atWork = c.busy && c.busy.until > now && c.busy.action === "work";
+  return homeOwner(spotId) === householdId && w.placeId === null && !atWork;
+}

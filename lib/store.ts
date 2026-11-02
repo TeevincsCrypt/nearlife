@@ -86,3 +86,42 @@ export async function resetState() {
     return fresh;
   });
 }
+
+// ---------------------------------------------------------------------------
+// Small side store (billboard bookings and images), kept out of the game state so
+// big values don't slow down every game request.
+// ---------------------------------------------------------------------------
+
+const gkv = globalThis as unknown as { __nearlifeKv?: Map<string, unknown> };
+
+export async function kvGet<T>(key: string): Promise<T | null> {
+  if (!redis) return ((gkv.__nearlifeKv ??= new Map()).get(key) as T) ?? null;
+  const raw = await redis.get<T | string>(key);
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return raw as T;
+    }
+  }
+  return raw;
+}
+
+export async function kvSet(key: string, value: unknown) {
+  if (!redis) {
+    (gkv.__nearlifeKv ??= new Map()).set(key, structuredClone(value));
+    return;
+  }
+  await redis.set(key, JSON.stringify(value));
+}
+
+/** Read-modify-write a side-store value under a lock. */
+export async function kvMutate<T, R>(key: string, init: () => T, fn: (value: T) => R): Promise<R> {
+  return withLock(async () => {
+    const value = (await kvGet<T>(key)) ?? init();
+    const result = fn(value);
+    await kvSet(key, value);
+    return result;
+  });
+}
